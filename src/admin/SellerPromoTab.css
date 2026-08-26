@@ -1,0 +1,63 @@
+/* PromoCodes.css */
+.promo-header-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.promo-form-card {
+    background: #f9fafb;
+    padding: 24px;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    margin-bottom: 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.promo-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.promo-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+    text-transform: uppercase;
+}
+
+.promo-input {
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    font-size: 14px;
+    width: 100%;
+}
+
+.promo-btn-submit {
+    background: var(--primary, #111827);
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.promo-btn-submit:hover { background: #374151; }
+
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+.status-badge.active { background: #dcfce7; color: #166534; }
+.status-badge.pending { background: #fef3c7; color: #b45309; }
+.status-badge.rejected { background: #fee2e2; color: #991b1b; }

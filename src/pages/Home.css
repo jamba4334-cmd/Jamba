@@ -1,0 +1,707 @@
+/* =========================================
+   HOME PAGE CSS — WARM SAND THEME
+   ========================================= */
+
+.home-container {
+  --ws-bg: #ffffff;
+  --ws-surface: #ffffff;
+  --ws-sand: #f0ebe3;
+  --ws-line: #e6dfd4;
+  --ws-accent: #c9b99a;
+  --ws-cocoa: #8b7355;
+  --ws-ink: #2b2620;
+  --ws-muted: #8a8178;
+  --ws-shadow: 0 8px 24px -12px rgba(43, 38, 32, 0.15);
+  
+  width: 100%;
+  min-height: 100vh;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--ws-ink);
+  background: var(--ws-bg);
+  padding-bottom: 60px;
+  margin-top: 17px; 
+}
+
+* { box-sizing: border-box; }
+
+/* =========================================
+   CATEGORY CHIPS (IOS BACKGROUND FIX)
+   ========================================= */
+.category-scroll {
+  position: -webkit-sticky; /* iOS Safari Requirement */
+  position: sticky;
+  top: 10px; 
+  z-index: 90;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  width: 100%; 
+  padding: 16px 20px 20px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch; 
+  
+  /* 🔥 FIX 1: Hardcoded #ffffff prevents iOS Safari from making the background transparent */
+  background-color: #ffffff !important; 
+  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.05);
+  margin-bottom: 1px;
+}
+
+.category-scroll::-webkit-scrollbar { display: none; }
+
+.chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 24px;
+  color: #374151; 
+  background: var(--ws-surface);
+  border: 1px solid var(--ws-line);
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.chip.active {
+  color: var(--ws-surface);
+  background: var(--ws-ink);
+  border-color: var(--ws-ink);
+  box-shadow: 0 6px 14px rgba(43, 38, 32, 0.2);
+}
+.chip:hover:not(.active) {
+  background: var(--ws-sand);
+  border-color: var(--ws-accent);
+  color: var(--ws-ink);
+  transform: translateY(-1px);
+}
+
+/* =========================================
+   CIRCLE ROW CATEGORIES (Featured Brands)
+   ========================================= */
+.circle-row-wrapper {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto 5px;
+  padding: 3px 0 24px;
+}
+
+.circle-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 0 20px;
+}
+
+.circle-title {
+  margin: 0;
+  color: var(--ws-ink);
+  font-size: 18px; 
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.circle-scroll {
+  display: flex;
+  gap: 24px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 5px;
+  justify-content: center;
+}
+.circle-scroll::-webkit-scrollbar { display: none; }
+
+.circle-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.circle-img-wrapper {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #ffffff;
+  padding: 4px; 
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin-bottom: 12px;
+  transition: transform 0.2s ease;
+}
+
+.circle-item:hover .circle-img-wrapper {
+  transform: translateY(-4px);
+}
+
+.circle-img-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.circle-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #111827;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+/* =========================================
+   PROMO BANNER CAROUSEL (IOS ROUNDED CORNER FIX)
+   ========================================= */
+.promo-carousel-section {
+  position: relative;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto 20px;
+  padding: 0 5px; 
+}
+
+.promo-carousel-stage {
+  display: block;
+  width: 100%;
+  height: clamp(140px, 20vw, 320px); 
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--ws-sand);
+  position: relative;
+  box-shadow: var(--ws-shadow);
+  
+  /* 🔥 FIX 2: Forces iOS Safari to actually clip the rounded corners */
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  -webkit-backface-visibility: hidden;
+  -moz-backface-visibility: hidden;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+.promo-carousel-track {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+}
+
+.promo-slide-wrapper {
+  position: relative;
+  /* 🔥 FIX 3: Prevents iOS from squishing flex elements */
+  flex: 0 0 100%; 
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.promo-slide-wrapper img,
+.promo-slide-wrapper video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;       
+  object-position: center; 
+  pointer-events: none;    
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.promo-dots {
+  position: absolute;
+  bottom: 20px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  z-index: 5;
+}
+
+.promo-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(250, 248, 245, 0.5);
+  border: 1px solid rgba(43, 38, 32, 0.2);
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.promo-dot.active {
+  background: var(--ws-surface);
+  border-color: var(--ws-ink);
+  width: 24px;
+  border-radius: 999px;
+}
+
+/* =========================================
+   SPLIT BANNERS (Hero)
+   ========================================= */
+.split-banner-section {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto 40px;
+  padding: 0 16px; 
+}
+
+.hero-banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: clamp(200px, 35vw, 400px); 
+  overflow: hidden;
+  background: var(--ws-sand);
+  border: 1px solid var(--ws-line);
+  border-radius: 16px;
+  box-shadow: var(--ws-shadow);
+  text-decoration: none;
+  
+  /* 🔥 FIX 4: Forces iOS Safari to clip the rounded corners on the hero banner too */
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  -webkit-backface-visibility: hidden;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+.hero-banner img,
+.hero-banner video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.shop-btn-wrapper {
+  position: relative;
+  z-index: 3;
+  pointer-events: none;
+  margin-top: auto;
+  margin-bottom: 30px;
+}
+
+.shop-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 160px;
+  padding: 14px 28px;
+  color: var(--ws-ink);
+  background: rgba(255, 255, 255, 0.95);
+  border: none;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 8px 24px rgba(43, 38, 32, 0.15);
+  transition: all 0.3s ease;
+  pointer-events: auto; 
+}
+
+@media (hover: hover) {
+  .promo-slide-wrapper:hover img,
+  .promo-slide-wrapper:hover video { transform: scale(1.02); }
+  .hero-banner:hover img,
+  .hero-banner:hover video { transform: scale(1.04); }
+  .hero-banner:hover .shop-btn {
+    background: var(--ws-ink);
+    color: var(--ws-surface);
+    transform: translateY(-2px);
+  }
+}
+
+/* =========================================
+   BUBBLE / PRODUCT ROW SECTIONS
+   ========================================= */
+.bubble-wrapper {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto 40px;
+  padding: 0 16px;
+}
+.bubble-container {
+  border: 1px solid var(--ws-line);
+  border-radius: 20px;
+  padding: 10px 5px 32px;
+  box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.5);
+}
+.bubble-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 0 8px;
+}
+.bubble-title {
+  margin: 0;
+  color: var(--ws-ink);
+  font-size: 18px; 
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.more-btn {
+  background: var(--ws-surface);
+  border: 1px solid var(--ws-line);
+  color: var(--ws-cocoa);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.more-btn:hover {
+  background: var(--ws-ink);
+  color: var(--ws-surface);
+  border-color: var(--ws-ink);
+  transform: translateX(3px); 
+}
+
+.bubble-scroll {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  scrollbar-width: none; 
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 12px; 
+}
+.bubble-scroll::-webkit-scrollbar { display: none; }
+
+/* =========================================
+   MINIMAL PRODUCT CARDS
+   ========================================= */
+.min-product-card {
+  flex: 0 0 auto;
+  width: 160px; 
+  background: var(--ws-surface);
+  border: 1px solid var(--ws-line);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(43, 38, 32, 0.03);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  
+  /* 🔥 FIX 5: Ensure product cards keep rounded corners on iOS */
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+.min-product-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--ws-accent);
+  box-shadow: 0 12px 24px -8px rgba(43, 38, 32, 0.15);
+}
+
+.min-image-wrapper {
+  position: relative;
+  width: 100%;
+  height: 200px; 
+  background: var(--ws-sand);
+}
+.min-image-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.min-product-info {
+  padding: 14px; 
+  text-align: left; 
+  display: flex;
+  flex-direction: column;
+}
+.min-title {
+  margin: 0;
+  color: var(--ws-ink);
+  font-size: 13px; 
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; 
+}
+.min-brand {
+  margin: 4px 0 8px 0;
+  color: var(--ws-muted); 
+  font-size: 11px; 
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; 
+}
+.min-price-row {
+  display: flex;
+  align-items: center;
+  gap: 8px; 
+  margin: 0;
+}
+.min-current-price {
+  color: var(--ws-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+.min-original-price {
+  color: #a39b8e;
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: line-through; 
+}
+
+/* =========================================
+   BRANDED LOADER
+   ========================================= */
+.home-loader {
+  --ws-bg: #faf8f5;
+  --ws-sand: #f0ebe3;
+  --ws-line: #e6dfd4;
+  --ws-cocoa: #8b7355;
+  --ws-ink: #2b2620;
+  --ws-amber: #e8a33d;
+
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  background: var(--ws-bg);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.loader-mark {
+  position: relative;
+  text-align: center;
+  animation: loaderRise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both,
+    loaderBreathe 3.2s ease-in-out 0.7s infinite;
+}
+
+.loader-wordmark {
+  position: relative;
+  display: inline-block;
+  font-size: clamp(30px, 7vw, 46px);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  color: var(--ws-ink);
+}
+.loader-wordmark .lw-amber { color: var(--ws-amber); }
+.loader-wordmark .lw-thin { font-weight: 400; letter-spacing: 0.26em; }
+
+.loader-wordmark::after {
+  content: "";
+  position: absolute;
+  inset: -6px -18px;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.85) 50%,
+    transparent 62%
+  );
+  mix-blend-mode: overlay;
+  transform: translateX(-120%);
+  animation: loaderShimmer 2.4s ease-in-out infinite;
+}
+
+.loader-tagline {
+  margin: 10px 0 0;
+  color: var(--ws-cocoa);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+}
+
+.loader-bar {
+  position: relative;
+  width: min(220px, 54vw);
+  height: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--ws-sand);
+}
+.loader-bar span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 42%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--ws-cocoa), transparent);
+  animation: loaderSlide 1.5s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+.loader-caption {
+  margin: 0;
+  color: var(--ws-cocoa);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+@keyframes loaderRise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes loaderBreathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.88; transform: scale(0.988); }
+}
+@keyframes loaderShimmer {
+  0% { transform: translateX(-120%); }
+  60%, 100% { transform: translateX(120%); }
+}
+@keyframes loaderSlide {
+  0% { left: -45%; }
+  100% { left: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loader-mark,
+  .loader-wordmark::after,
+  .loader-bar span { animation: none; }
+  .loader-bar span { left: 0; width: 100%; opacity: 0.5; }
+}
+
+/* =========================================
+   MEDIA QUERIES 
+   ========================================= */
+@media (min-width: 768px) {
+  .split-banner-section { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding: 0 28px; }
+  .bubble-wrapper { padding: 0 28px; }
+  .bubble-container { padding: 32px 28px 36px; border-radius: 20px;}
+  .min-product-card { width: 180px; border-radius: 14px; }
+  .min-image-wrapper { height: 220px; }
+  .min-product-info { padding: 14px 16px; }
+  .home-container {margin-top: 18px;}
+}
+
+@media (max-width: 600px) {
+  .home-container {margin-top: 73px;}
+  
+  .category-scroll { 
+    position: sticky;
+    justify-content: flex-end; 
+    padding: 10px; 
+    top: 30px; 
+  }
+  
+  .chip { padding: 0 20px; font-size: 13px; }
+  .circle-scroll { gap: 16px; padding: 0 16px; justify-content: flex-start; }
+  .circle-img-wrapper { width: 80px; height: 80px; padding: 3px; }
+  .circle-name { font-size: 11px; }
+  
+  .promo-carousel-stage { 
+    height: 180px; 
+    min-height: 180px; 
+    max-height: 180px; 
+  } 
+  
+  .split-banner-section { padding: 0 14px; margin-bottom: 24px; }
+  
+  .hero-banner { 
+    height: 180px; 
+    min-height: 180px; 
+    max-height: 180px; 
+    border-radius: 12px; 
+  }
+  
+  .shop-btn { min-width: 140px; padding: 12px 20px; font-size: 11px; }
+  .bubble-wrapper { padding: 0 14px; margin-bottom: 24px; }
+  .bubble-container { padding: 20px 16px 24px; border-radius: 16px; }
+  .min-product-card { width: 140px; }
+  .min-image-wrapper { height: 180px; }
+}
+
+/* =========================================
+   OFFLINE / NO CONNECTION STATE
+   ========================================= */
+.offline-state-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 100px 20px;
+  min-height: 60vh;
+}
+
+.offline-icon-circle {
+  width: 80px;
+  height: 80px;
+  background: var(--ws-sand);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ws-cocoa);
+  margin-bottom: 24px;
+}
+
+.offline-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--ws-ink);
+  margin: 0 0 12px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.offline-desc {
+  font-size: 14px;
+  color: var(--ws-muted);
+  margin: 0 0 32px 0;
+  max-width: 300px;
+  line-height: 1.5;
+}
+
+.offline-retry-btn {
+  padding: 14px 32px;
+  background: var(--ws-ink);
+  color: var(--ws-surface);
+  border: none;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 24px rgba(43, 38, 32, 0.15);
+}
+
+.offline-retry-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(43, 38, 32, 0.25);
+}

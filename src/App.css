@@ -1,0 +1,42 @@
+/* --- JAMBA WEAR GLOBAL STYLES --- */
+/* (This replaces all the default Vite/React starter CSS) */
+
+:root {
+  --primary: #1a1a1a;
+  --accent: #d2b48c;
+  --bg: #f8f8f8;
+  --text-main: #333;
+  --text-light: #777;
+  --border: #eaeaea;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  color: var(--primary);
+  
+  /* 🚨 Notice there is NO padding-top here! 
+     Our new Navbar.jsx spacer handles the gap perfectly. */
+}
+
+a { 
+  text-decoration: none; 
+  color: inherit; 
+}
+
+/* Optional: Custom Scrollbar for a cleaner, premium look */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-light);
+}

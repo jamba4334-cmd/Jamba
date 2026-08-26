@@ -1,0 +1,100 @@
+/* --- JAMBA WEAR GLOBAL POLICY STYLES --- */
+
+/* The main container for all policy documents */
+.policy-container {
+    flex: 1;
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 40px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+    border: 1px solid #eaeaea;
+}
+
+/* Page Titles */
+.policy-container h1 {
+    font-size: 28px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #1a1a1a;
+    margin-bottom: 10px;
+}
+
+/* The 'Last Updated' timestamp */
+.policy-container .last-updated {
+    font-size: 12px;
+    color: #777;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 30px;
+    display: block;
+    border-bottom: 2px solid #d2b48c;
+    padding-bottom: 20px;
+}
+
+/* Section Headings */
+.policy-container h2 {
+    font-size: 18px;
+    margin-top: 30px;
+    color: #1a1a1a;
+}
+
+/* Standard Body Text and Lists */
+.policy-container p, 
+.policy-container li {
+    font-size: 15px;
+    line-height: 1.8;
+    color: #333;
+    margin-bottom: 15px;
+}
+
+/* --- Contact Us Form Styles --- */
+.contact-form-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 40px;
+}
+
+.contact-input {
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 15px;
+    font-family: inherit; /* Ensures it matches your global font */
+}
+
+.contact-textarea {
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 15px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.contact-submit-btn {
+    padding: 12px 20px;
+    background-color: #1a1a1a;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 15px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.3s ease;
+}
+
+.contact-submit-btn:hover {
+    background-color: #333; /* Slight hover effect */
+}
+
+
+/* --- Mobile Responsiveness --- */
+@media (max-width: 767px) {
+    .policy-container { 
+        margin: 20px 10px; /* Reduced margin for smaller screens */
+        padding: 20px; 
+    }
+}

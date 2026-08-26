@@ -1,0 +1,505 @@
+/* ============================================================
+   CategorySettings.css — Warm Sand theme
+   Same selectors, same layout, same class names.
+   Colours only: cream #faf8f5 · sand #f0ebe3 · taupe #c9b99a
+   cocoa #8b7355 · ink #2d2a26 · line #e5ded4
+   ok #5d7a5a · warn #b08a4a · danger #a8544a
+   ============================================================ */
+/* =========================================================
+   DYNAMIC PAGE BUILDER STYLES
+   ========================================================= */
+.category-section {
+    animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    font-family: "Inter", -apple-system, sans-serif;
+}
+
+/* --- TABS --- */
+.builder-tabs {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 30px;
+    border-bottom: 2px solid #e5ded4;
+    padding-bottom: 10px;
+}
+
+.builder-tab {
+    background: transparent;
+    border: none;
+    font-size: 16px;
+    font-weight: 600;
+    color: #a89f92;
+    cursor: pointer;
+    padding: 8px 16px;
+    text-transform: uppercase;
+    transition: color 0.2s, border-bottom 0.2s;
+    position: relative;
+}
+
+.builder-tab.active {
+    color: #2d2a26;
+}
+
+.builder-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -12px;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background-color: #2d2a26;
+    border-radius: 3px 3px 0 0;
+}
+
+/* --- DYNAMIC BLOCKS --- */
+.builder-block {
+    background: #f7f4f0;
+    border: 1px dashed #d9d0c3;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    position: relative;
+}
+
+.block-delete-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: #f6e3de;
+    color: #a8544a;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.block-title-input {
+    font-size: 20px;
+    font-weight: 600;
+    text-transform: uppercase;
+    border: none;
+    background: transparent;
+    border-bottom: 2px solid transparent;
+    color: #2d2a26;
+    outline: none;
+    width: 60%;
+    margin-bottom: 20px;
+    padding-bottom: 4px;
+    transition: 0.2s;
+}
+
+.block-title-input:focus {
+    border-bottom: 2px solid #2d2a26;
+}
+
+/* --- ROW ITEMS (Circles & Rectangles) --- */
+.row-scroll-area {
+    display: flex;
+    gap: 20px;
+    overflow-x: auto;
+    padding-bottom: 20px; /* Added padding to make room for the scrollbar */
+    /* Removed scrollbar-width: none so it shows up */
+}
+
+/* 👈 NEW: Sleek custom scrollbar for the Admin rows */
+.row-scroll-area::-webkit-scrollbar {
+    height: 8px;
+}
+
+.row-scroll-area::-webkit-scrollbar-track {
+    background: rgba(45, 42, 38, 0.05);
+    border-radius: 4px;
+}
+
+.row-scroll-area::-webkit-scrollbar-thumb {
+    background: rgba(45, 42, 38, 0.2);
+    border-radius: 4px;
+}
+
+.row-scroll-area::-webkit-scrollbar-thumb:hover {
+    background: rgba(45, 42, 38, 0.4);
+}
+
+.row-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.item-delete-btn {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #a8544a;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    z-index: 10;
+    font-size: 10px;
+}
+
+/* Shape toggles from wireframe */
+.upload-box {
+    background-color: #e5ded4;
+    border: 1px dashed #a89f92;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    cursor: pointer;
+    overflow: hidden;
+    position: relative;
+}
+
+.upload-box.circle {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+}
+
+.upload-box.rectangle {
+    width: 120px;
+    height: 160px;
+    border-radius: 8px;
+}
+
+.upload-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.item-name-input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: #2d2a26;
+    outline: none;
+}
+
+/* --- MASTER ADD BUTTON --- */
+.master-add-container {
+    text-align: center;
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 2px dashed #e5ded4;
+}
+
+.master-add-btn {
+    background: #2d2a26;
+    color: #faf8f5;
+    border: none;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
+    cursor: pointer;
+    transition: transform 0.2s, background 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.master-add-btn:hover {
+    transform: scale(1.1);
+    background: #3b3733;
+}
+
+.add-options {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.option-btn {
+    background: #faf8f5;
+    color: #2d2a26;
+    border: 1px solid #d9d0c3;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.option-btn:hover { background: #f0ebe3; }
+
+/* =========================================================
+   NEW UPGRADES: BANNER CAROUSEL & PRODUCT MODAL
+   ========================================================= */
+
+/* --- BANNER CAROUSEL --- */
+.banner-carousel {
+    position: relative;
+    width: 100%;
+    height: 250px;
+    background: #e5ded4;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.banner-carousel img, .banner-carousel video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.carousel-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid #d9d0c3;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 14px;
+    cursor: pointer;
+    z-index: 2;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #2d2a26; 
+}
+
+.carousel-arrow:hover { background: #faf8f5; }
+.carousel-arrow.left { left: 16px; }
+.carousel-arrow.right { right: 16px; }
+
+.carousel-dots {
+    position: absolute;
+    bottom: 16px;
+    display: flex;
+    gap: 8px;
+    z-index: 2;
+}
+
+.carousel-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid #2d2a26;
+    cursor: pointer;
+}
+
+.carousel-dot.active {
+    background: #faf8f5;
+    border-color: #2d2a26;
+}
+
+.banner-add-slide-btn {
+    margin-top: 16px;
+    background: #faf8f5;
+    color: #2d2a26;
+    border: 1px solid #d9d0c3;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.upload-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(45, 42, 38,0.6);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    z-index: 10;
+}
+
+/* --- PRODUCT SEARCH MODAL --- */
+.product-modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(45, 42, 38,0.6);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.product-modal {
+    background: #faf8f5;
+    width: 90%;
+    max-width: 700px;
+    border-radius: 16px;
+    padding: 24px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.product-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.product-modal-header h3 { margin: 0; font-size: 20px; }
+
+.modal-close-btn {
+    background: transparent;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: #7a736b;
+}
+
+.product-search-input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #d9d0c3;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+.product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 16px;
+    overflow-y: auto;
+    padding-bottom: 10px;
+}
+
+.product-select-card {
+    border: 1px solid #e5ded4;
+    border-radius: 8px;
+    padding: 8px;
+    cursor: pointer;
+    text-align: center;
+    transition: 0.2s;
+}
+
+.product-select-card:hover {
+    border-color: #2d2a26;
+    transform: translateY(-2px);
+}
+
+.product-select-card img {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.product-select-card p {
+    font-size: 12px;
+    font-weight: 600;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+/* --- ADMIN PRODUCT CARD PREVIEW (RECTANGLE) --- */
+.admin-product-card {
+    background: #e8d5a8; 
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    width: 170px;
+    position: relative;
+    text-align: left;
+}
+
+.admin-product-card .img-wrapper {
+    width: 100%;
+    aspect-ratio: 3/4;
+    padding: 6px;
+    background: #faf8f5;
+    border-radius: 12px 12px 0 0;
+    box-sizing: border-box;
+}
+
+.admin-product-card .img-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+.admin-product-info {
+    padding: 10px;
+}
+
+.admin-product-title {
+    margin: 0;
+    color: #2d2a26;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.admin-product-brand {
+    margin: 2px 0 8px 0;
+    color: #7a736b;
+    font-size: 10px;
+    font-weight: 500;
+}
+
+.admin-product-price-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.admin-price-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.admin-current-price {
+    color: #2d2a26;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.admin-original-price {
+    color: #8a8178;
+    font-size: 10px;
+    font-weight: 500;
+    text-decoration: line-through;
+}
+
+.admin-heart-btn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: #2d2a26;
+    display: flex;
+    font-size: 14px;
+}

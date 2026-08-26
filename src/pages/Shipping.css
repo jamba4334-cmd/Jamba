@@ -1,0 +1,109 @@
+/* --- GLOBAL THEME STYLES --- */
+:root {
+    --primary: #1a1a1a;
+    --accent: #d2b48c;
+    --bg: #f8f8f8;
+    --text-main: #333;
+    --text-light: #777;
+    --nav-height: 80px;
+}
+
+body { 
+    margin: 0; 
+    padding: 0; 
+    background-color: var(--bg); 
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+    color: var(--primary); 
+    padding-top: var(--nav-height); 
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+a { text-decoration: none; color: inherit; }
+
+/* --- HEADER --- */
+.top-bar { 
+    display: flex; justify-content: space-between; align-items: center; 
+    padding: 0 20px; position: fixed; top: 0; width: 100%; height: var(--nav-height);
+    box-sizing: border-box; background-color: rgba(255, 255, 255, 0.98); 
+    backdrop-filter: blur(10px); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04); z-index: 1000; 
+}
+.logo img { width: 220px; height: auto; display: block; object-fit: contain; transition: transform 0.3s ease; }
+.logo img:hover { transform: scale(1.02); }
+
+.right-actions { display: flex; align-items: center; gap: 20px; } 
+.action-item { display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; text-decoration: none; color: var(--primary); }
+.nav-text { font-size: 9px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+.nav-icon { width: 22px; height: 22px; fill: none; stroke: var(--primary); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+.login-nav-btn { background-color: var(--primary); color: white; padding: 8px 14px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; border: 1px solid var(--primary); white-space: nowrap; transition: 0.3s; }
+.login-nav-btn:hover { background-color: transparent; color: var(--primary); }
+
+.cart-icon-wrapper { position: relative; display: flex; align-items: center; justify-content: center; }
+.cart-badge { position: absolute; top: -5px; right: -8px; background-color: var(--accent); color: #fff; font-size: 9px; font-weight: bold; height: 14px; min-width: 14px; border-radius: 7px; display: flex; align-items: center; justify-content: center; padding: 0 3px; box-sizing: border-box; }
+
+.profile-wrapper { position: relative; display: flex; align-items: center; }
+.dropdown-menu { position: absolute; top: 50px; right: 0; width: 180px; background-color: white; border-radius: 8px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); display: none; flex-direction: column; overflow: hidden; z-index: 1001; border: 1px solid #eaeaea; }
+.dropdown-menu.show { display: flex; }
+.dropdown-header { padding: 15px; font-weight: bold; font-size: 14px; background-color: #fafafa; border-bottom: 1px solid #eaeaea; color: var(--primary); }
+.dropdown-menu a { padding: 12px 15px; font-size: 13px; color: var(--text-main); border-bottom: 1px solid #f5f5f5; transition: 0.2s; }
+.dropdown-menu a:hover { background-color: #f9f9f9; color: var(--primary); }
+.logout-link { color: #d9534f !important; font-weight: bold; border-top: 1px solid #eee; }
+
+/* --- POLICY DOCUMENT STYLES --- */
+.policy-container {
+    flex: 1;
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 40px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+    border: 1px solid #eaeaea;
+}
+
+.policy-container h1 {
+    font-size: 28px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--primary);
+    margin-bottom: 10px;
+}
+
+.policy-container .last-updated {
+    font-size: 12px;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 30px;
+    display: block;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 20px;
+}
+
+.policy-container h2 {
+    font-size: 18px;
+    margin-top: 30px;
+    color: var(--primary);
+}
+
+.policy-container p, .policy-container li {
+    font-size: 15px;
+    line-height: 1.8;
+    color: var(--text-main);
+    margin-bottom: 15px;
+}
+
+.seo-footer { text-align: center; padding: 60px 20px; background-color: #fff; border-top: 1px solid #eee; margin-top: auto; }
+
+@media (min-width: 768px) {
+    .top-bar { padding: 0 5%; }
+    .logo img { height: 60px; }
+}
+@media (max-width: 767px) {
+    .logo img { width: 140px; }
+    .top-bar { padding: 0 10px; }
+    .right-actions { gap: 12px; }
+    .policy-container { margin: 20px; padding: 20px; }
+}

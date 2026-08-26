@@ -1,0 +1,37 @@
+/* =========================================================
+   SELLER DASHBOARD FOOTER
+   ========================================================= */
+.seller-footer-wrapper {
+    margin-top: 40px;
+    padding: 24px 20px;
+    border-top: 1px solid #e5e7eb;
+    text-align: center;
+    color: var(--text-muted, #6b7280);
+    font-size: 12px;
+    line-height: 1.6;
+    background-color: transparent;
+}
+
+.seller-footer-links {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.seller-footer-link {
+    cursor: pointer;
+    color: var(--primary, #111827);
+    font-weight: 600;
+    transition: var(--transition, 0.2s ease);
+    text-decoration: none;
+}
+
+.seller-footer-link:hover {
+    color: var(--accent, #c5a059);
+}
+
+.seller-footer-text {
+    margin: 4px 0;
+}

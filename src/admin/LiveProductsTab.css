@@ -1,0 +1,269 @@
+/* =========================================================
+   LIVE PRODUCTS TAB (SYNCED WITH ADMIN) + SELLER MOCKUP FIXES
+   ========================================================= */
+
+.lp-add-btn-black {
+    background-color: #111827 !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 6px !important;
+    padding: 8px 16px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.lp-add-btn-black:hover {
+    background-color: #000000 !important;
+}
+
+.product-card-container {
+    display: flex;
+    gap: 24px;
+    padding: 24px;
+    background: var(--card-bg, #ffffff);
+    border-radius: var(--radius-md, 12px);
+    margin-bottom: 16px;
+    transition: var(--transition, all 0.3s ease);
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.product-card-container:hover {
+    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06));
+}
+
+.product-info-col { flex: 1; }
+
+.product-meta-text {
+    font-size: 12px;
+    color: var(--text-muted, #6b7280);
+    font-weight: 500;
+    margin-bottom: 6px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.hero-badge {
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 700;
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    text-transform: uppercase;
+    background-color: var(--primary, #8b5cf6);
+}
+
+.product-upload-text {
+    font-size: 11px;
+    color: #9CA3AF;
+    margin-bottom: 8px;
+}
+
+.product-title-text {
+    font-size: 16px;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 4px;
+}
+
+.seller-bottom-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+}
+
+.seller-bottom-row .product-price-row {
+    font-size: 14px;
+    color: var(--text-main, #1f2937);
+    margin-bottom: 0;
+}
+
+.seller-bottom-row .product-action-row {
+    padding-top: 0;
+    border-top: none;
+    margin-top: 0;
+    display: flex;
+    align-items: center;
+}
+
+.action-btn {
+    background: white;
+    border: 1px solid var(--input-border, #d1d5db);
+    padding: 6px 14px;
+    border-radius: var(--radius-sm, 6px);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-main, #1f2937);
+    cursor: pointer;
+    transition: var(--transition, all 0.2s ease);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.action-btn:hover { background: #f9fafb; }
+
+
+/* =========================================================
+   THUMBNAIL & LIGHTBOX STYLES 
+   ========================================================= */
+.product-thumb-wrapper {
+    position: relative;
+    width: 130px;
+    height: 150px;
+    flex-shrink: 0;
+    cursor: pointer;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+}
+
+.product-thumb-scroll {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none; 
+}
+.product-thumb-scroll::-webkit-scrollbar { display: none; }
+
+.product-thumb-img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    flex-shrink: 0;
+    scroll-snap-align: start; 
+    border: none !important;
+    transition: transform 0.3s;
+    display: block;
+}
+
+.product-thumb-wrapper:hover .product-thumb-img { transform: scale(1.05); }
+
+.product-thumb-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 24px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+}
+
+.product-thumb-wrapper:hover .product-thumb-overlay { opacity: 1; }
+
+.video-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    pointer-events: none;
+}
+
+/* Lightbox Overlay */
+.media-lightbox-overlay {
+    position: fixed !important;
+    top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+    background: rgba(0, 0, 0, 0.95) !important;
+    z-index: 99999 !important; 
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100vw; height: 100vh;
+}
+.lightbox-close-btn { position: absolute !important; top: 20px !important; right: 24px !important; background: rgba(255,255,255,0.1); color: white; border: none; font-size: 24px; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; z-index: 100001 !important; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+.lightbox-close-btn:hover { background: rgba(255,255,255,0.3); }
+.lightbox-nav-btn { position: absolute !important; top: 50% !important; transform: translateY(-50%) !important; background: rgba(255,255,255,0.1); color: white; border: none; width: 50px; height: 50px; border-radius: 50%; font-size: 20px; cursor: pointer; z-index: 100001 !important; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+.lightbox-nav-btn:hover { background: rgba(255,255,255,0.3); }
+.lightbox-nav-btn.left { left: 30px !important; }
+.lightbox-nav-btn.right { right: 30px !important; }
+.lightbox-scroll-track { width: 100%; height: 85vh; display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none; }
+.lightbox-scroll-track::-webkit-scrollbar { display: none; }
+.lightbox-scroll-item { min-width: 100%; height: 100%; scroll-snap-align: center; display: flex; align-items: center; justify-content: center; padding: 0 80px; }
+.lightbox-media-content { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
+.lightbox-indicator { position: absolute !important; bottom: 30px !important; color: rgba(255,255,255,0.6); font-size: 14px; pointer-events: none; }
+
+
+/* =========================================================
+   🔥 PERFECT MOBILE RESPONSIVENESS (FULL IMAGE & LIGHTBOX)
+   ========================================================= */
+@media (max-width: 768px) {
+    .product-card-container {
+        flex-direction: column-reverse;
+        gap: 16px;
+        padding: 16px;
+    }
+    
+    /* Inline Card Image - Full Size */
+    .product-thumb-wrapper {
+        width: 100%;
+        height: 320px; 
+        border: none;
+        border-radius: 8px;
+        cursor: default;
+    }
+    
+    .product-thumb-overlay { display: none !important; }
+
+    /* Price and Action Row */
+    .seller-bottom-row {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+    }
+    
+    .seller-bottom-row .product-action-row {
+        flex-direction: row; 
+    }
+
+    /* 🔥 FULL SCREEN MOBILE LIGHTBOX 🔥 */
+    .media-lightbox-overlay {
+        background: #000000 !important; /* Pure black for full immersion */
+    }
+    
+    .lightbox-scroll-track { 
+        height: 100dvh; /* Uses dynamic viewport height (bypasses mobile browser bars) */
+        align-items: center;
+    }
+    
+    .lightbox-scroll-item { 
+        padding: 0 !important; /* Removes all padding, touches screen edges */
+        width: 100vw;
+    }
+    
+    .lightbox-media-content {
+        width: 100vw;
+        height: 100dvh;
+        border-radius: 0; /* No rounded corners on full screen */
+        box-shadow: none; /* Shadow not needed on pure black */
+        object-fit: contain; /* Ensures the whole image is visible */
+    }
+    
+    .lightbox-nav-btn { display: none !important; } 
+    
+    .lightbox-close-btn { 
+        top: 16px !important; 
+        right: 16px !important; 
+        background: rgba(0,0,0,0.6) !important; /* Darker close button so it's visible over images */
+        z-index: 999999 !important;
+    }
+}

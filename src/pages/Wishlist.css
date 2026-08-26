@@ -1,0 +1,174 @@
+/* =========================================
+   WISHLIST CSS — WARM SAND THEME
+   ========================================= */
+
+.wishlist-page-wrapper {
+  --ws-bg: #ffffff;
+  --ws-surface: #ffffff;
+  --ws-sand: #f0ebe3;
+  --ws-line: #e6dfd4;
+  --ws-accent: #c9b99a;
+  --ws-cocoa: #8b7355;
+  --ws-ink: #2b2620;
+  --ws-muted: #8a8178;
+
+  max-width: 1100px;
+  margin: 0 auto;
+  /* 🔥 FIX 1: Increased top padding to 130px to clear the fixed Navbar */
+  padding: 10px 20px 80px; 
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--ws-ink);
+}
+
+.wishlist-page-title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 30px;
+  border-bottom: 2px solid var(--ws-ink);
+  padding-bottom: 12px;
+}
+
+.wishlist-empty-msg {
+  text-align: center;
+  margin-top: 60px;
+  color: var(--ws-muted);
+  font-size: 15px;
+}
+
+.wishlist-grid {
+  display: grid;
+  /* 🔥 FIX 2: Strict grid constraints so cards don't stretch indefinitely */
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 24px;
+}
+
+.wishlist-card {
+  background: var(--ws-surface);
+  border: 1px solid var(--ws-line);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 12px rgba(43, 38, 32, 0.03);
+}
+
+.wishlist-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--ws-accent);
+  box-shadow: 0 12px 24px -8px rgba(43, 38, 32, 0.15);
+}
+
+.wishlist-image-wrapper {
+  width: 100%;
+  /* 🔥 FIX 3: Forced aspect ratio and height constraints for the image */
+  aspect-ratio: 3/4;
+  max-height: 400px; 
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--ws-sand);
+}
+
+.wishlist-image-wrapper img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: top center;
+  transition: transform 0.6s ease;
+}
+
+.wishlist-card:hover .wishlist-image-wrapper img {
+  transform: scale(1.05);
+}
+
+.wishlist-info {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  flex: 1; /* Pushes the button to the bottom if titles vary in length */
+}
+
+.wishlist-item-title {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ws-ink);
+}
+
+.wishlist-item-price {
+  margin: 0 0 16px 0;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.wishlist-remove-btn {
+  width: 100%;
+  padding: 10px;
+  margin-top: auto;
+  background: var(--ws-surface);
+  border: 1px solid var(--ws-line);
+  color: var(--ws-ink);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.wishlist-remove-btn:hover {
+  background: var(--ws-ink);
+  color: var(--ws-surface);
+}
+
+.ws-loading-state, .ws-empty-state {
+  text-align: center;
+  margin-top: 150px; /* Increased to clear navbar */
+  font-family: "Inter", sans-serif;
+  color: #2b2620;
+}
+
+.ws-primary-btn {
+  padding: 12px 24px;
+  background: #2b2620;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  margin-top: 20px;
+}
+
+/* 🔥 Mobile adjustments for the fixed elements */
+@media (max-width: 768px) {
+  .wishlist-page-wrapper {
+    padding-top: 90px;
+    padding-bottom: 90px; /* Accounts for bottom mobile menus if any */
+  }
+  .wishlist-grid {
+    grid-template-columns: repeat(2, 1fr); /* 2 columns on mobile */
+    gap: 12px;
+  }
+  .wishlist-image-wrapper {
+    max-height: 250px; 
+  }
+  .wishlist-item-title {
+    font-size: 12px;
+  }
+  .wishlist-item-price {
+    font-size: 13px;
+  }
+  .wishlist-remove-btn {
+    padding: 8px;
+    font-size: 11px;
+  }
+}

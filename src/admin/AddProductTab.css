@@ -1,0 +1,144 @@
+/* =========================================================
+   ADD PRODUCT & SIZING TAB STYLES
+   ========================================================= */
+
+.add-product-container {
+    animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --- Dynamic Pricing Box --- */
+.pricing-breakdown-box {
+    transition: all 0.3s ease;
+}
+
+.pricing-breakdown-box h4 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* --- Payment Ways & Checkboxes --- */
+.payment-ways-container {
+    margin-bottom: 30px;
+    background: var(--bg-light, #f9fafb);
+    padding: 20px;
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid var(--input-border, #e5e7eb);
+}
+
+.payment-ways-title {
+    display: block;
+    margin-bottom: 12px;
+    font-weight: 600;
+    color: var(--primary, #8b5cf6);
+    font-size: 13px;
+}
+
+.checkbox-group {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary, #8b5cf6);
+    cursor: pointer;
+}
+
+/* --- Size Chart Table Inputs --- */
+table input[type="number"], 
+table input[type="text"] {
+    transition: all 0.2s ease;
+}
+
+table input[type="number"]:focus, 
+table input[type="text"]:focus {
+    outline: none;
+    border-color: var(--primary, #8b5cf6) !important;
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.1);
+}
+
+table input[type="number"]:disabled, 
+table input[type="text"]:disabled {
+    background-color: #f3f4f6;
+    color: #9ca3af;
+    cursor: not-allowed;
+}
+
+/* --- Media Upload Grid --- */
+.image-preview-item {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+    height: 100%;
+}
+
+.remove-img-btn {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: var(--danger, #ef4444);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    transition: transform 0.2s, background 0.2s;
+    z-index: 10;
+}
+
+.remove-img-btn:hover {
+    transform: scale(1.1);
+    background: #dc2626; /* Darker red on hover */
+}
+
+/* Custom overlay for upload blocks on hover */
+label[for^="file-upload-"]:hover div i,
+label[for="video-upload"]:hover div i {
+    color: var(--primary, #8b5cf6) !important;
+    transform: translateY(-2px);
+    transition: all 0.3s ease;
+}
+
+label[for^="file-upload-"] div i,
+label[for="video-upload"] div i {
+    transition: all 0.3s ease;
+}
+
+/* --- Mobile Optimizations --- */
+@media (max-width: 768px) {
+    .pricing-breakdown-box {
+        padding: 12px;
+    }
+    
+    .checkbox-group {
+        gap: 16px;
+        flex-direction: column;
+    }
+    
+    /* Ensure the sizing tables scroll smoothly on small screens */
+    div[style*="overflowX: 'auto'"], 
+    div[style*="overflow-x: auto"] {
+        -webkit-overflow-scrolling: touch;
+        border-right: 1px solid #e5e7eb;
+    }
+
+    
+}

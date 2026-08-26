@@ -1,0 +1,155 @@
+/* =========================================================
+   STORE REVIEWS & LIGHTBOX STYLES
+   ========================================================= */
+.reviews-container {
+    animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.admin-reviews-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.review-admin-card {
+    padding: 20px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--input-border);
+    background: var(--card-bg);
+    margin-bottom: 0;
+    transition: var(--transition);
+}
+
+.review-admin-card:hover {
+    box-shadow: var(--shadow-sm);
+    border-color: #d1d5db;
+}
+
+.review-admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+}
+
+.review-product-thumb {
+    width: 50px;
+    height: 50px;
+    border-radius: 6px;
+    object-fit: cover;
+    border: 1px solid var(--input-border);
+}
+
+.r-prod-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--primary);
+}
+
+.r-user-info {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.rev-star-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.rating-5, .rating-4 { background: var(--success-light); color: var(--success); }
+.rating-3 { background: var(--warning-light); color: var(--warning); }
+.rating-2, .rating-1 { background: var(--danger-light); color: var(--danger); }
+
+.review-admin-body {
+    font-size: 14px;
+    color: var(--text-main);
+    font-style: italic;
+    margin-bottom: 16px;
+    background: var(--bg-light);
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid var(--input-border);
+}
+
+.review-admin-images {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.review-admin-images img {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid var(--input-border);
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.review-admin-images img:hover {
+    transform: scale(1.05);
+}
+
+.review-admin-footer {
+    display: flex;
+    justify-content: flex-end;
+    border-top: 1px solid #f3f4f6;
+    padding-top: 12px;
+}
+
+/* --- LIGHTBOX OVERLAY --- */
+.image-lightbox-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(17, 24, 39, 0.85);
+    backdrop-filter: blur(4px);
+    z-index: 9999999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: zoom-out;
+    animation: fadeIn 0.2s ease;
+}
+
+.image-lightbox-content {
+    position: relative;
+    max-width: 85%;
+    max-height: 85%;
+    cursor: default;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.image-lightbox-content img {
+    max-width: 100%;
+    max-height: 85vh;
+    object-fit: contain;
+    border-radius: 4px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.image-lightbox-close {
+    position: absolute;
+    top: -45px;
+    right: 0;
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    opacity: 0.7;
+}
+
+.image-lightbox-close:hover {
+    opacity: 1;
+}

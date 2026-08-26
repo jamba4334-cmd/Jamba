@@ -1,0 +1,70 @@
+/* ============================================================
+   AddProduct.css — Warm Sand theme
+   Same selectors, same layout, same class names.
+   Colours only: cream #faf8f5 · sand #f0ebe3 · taupe #c9b99a
+   cocoa #8b7355 · ink #2d2a26 · line #e5ded4
+   ok #5d7a5a · warn #b08a4a · danger #a8544a
+   ============================================================ */
+/* =========================================================
+   ADD PRODUCT & IMAGE UPLOAD STYLES
+   ========================================================= */
+.add-product-container {
+    animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.product-preview {
+    width: 100%;
+    min-height: 150px;
+    background: var(--bg-light);
+    border: 2px dashed #d9d0c3;
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 24px;
+    transition: var(--transition);
+}
+
+.product-preview:hover {
+    border-color: var(--input-focus);
+    background: #faf8f5;
+    color: var(--input-focus);
+}
+
+.preview-grid {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    width: 100%;
+}
+
+.preview-grid img {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--input-border);
+}
+
+.upload-label {
+    cursor: pointer;
+}
+
+/* Mobile Image Preview Adjustments */
+@media (max-width: 768px) {
+    .preview-grid { 
+        justify-content: flex-start; 
+        gap: 8px; 
+    }
+    .preview-grid img { 
+        width: calc(33.33% - 6px); 
+        height: auto; 
+        aspect-ratio: 1; 
+    }
+}

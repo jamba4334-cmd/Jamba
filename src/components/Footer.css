@@ -1,0 +1,93 @@
+/* --- THEME VARIABLES --- */
+/* Replace these hex codes with your app's actual theme colors */
+:root {
+    --footer-bg-color: #1c2838;       /* Currently Dark Blue */
+    --brand-color-primary: #bfa36a;   /* Currently Golden/Mustard */
+    --brand-color-secondary: #f0f0f0; /* Currently Off-White */
+    --text-color-main: #ffffff;
+    --text-color-muted: #cccccc;
+    --border-color: #333333;
+}
+
+.seo-footer { 
+    text-align: center; 
+    padding: 25px 20px; 
+    background-color: var(--footer-bg-color);
+    border-top: 1px solid var(--border-color); 
+    margin-top: auto; 
+    width: 100%; 
+    box-sizing: border-box;
+    color: var(--text-color-main);
+}
+
+.brand-name {
+    font-size: 1.8em; 
+    font-weight: bold;
+    margin: 4px 0 15px 0;
+}
+
+.brand-name span.brand-part-one {
+    color: var(--brand-color-primary); 
+}
+
+.brand-name span.brand-part-two {
+    color: var(--brand-color-secondary); 
+}
+
+.social-links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+    margin: 15px 0;
+}
+
+.social-icon-link {
+    color: var(--text-color-main); 
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.social-icon-link:hover {
+    color: var(--brand-color-primary); /* Icons will glow with your primary brand color on hover */
+    transform: scale(1.15);
+}
+
+.footer-links {
+    display: flex; 
+    flex-wrap: wrap; 
+    justify-content: center; 
+    align-items: center; 
+    gap: 15px; 
+    margin: 12px 0 20px; 
+    font-size: 12px; 
+    color: var(--text-color-muted); 
+}
+
+.footer-links a {
+    text-decoration: underline;
+    color: inherit;
+}
+
+.footer-links a.seller-portal-btn {
+    text-decoration: none;
+    background-color: #000;
+    color: #fff;
+    padding: 5px 12px;
+    border-radius: 4px;
+    font-weight: 600;
+    transition: background-color 0.2s ease;
+}
+
+.footer-links a.seller-portal-btn:hover {
+    background-color: #333;
+}
+
+.copyright {
+    font-size: 12px; 
+    color: #888;
+    margin-top: 10px;
+}

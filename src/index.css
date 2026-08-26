@@ -1,0 +1,30 @@
+/* --- GLOBAL THEME STYLES --- */
+:root {
+  --primary: #1a1a1a;
+  --accent: #d2b48c;
+  --bg: #f8f8f8;
+  --text-main: #333;
+  --text-light: #777;
+  --nav-height: 80px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  color: var(--primary);
+  padding-top: var(--nav-height); 
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+a { 
+  text-decoration: none; 
+  color: inherit; 
+}

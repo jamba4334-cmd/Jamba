@@ -1,0 +1,28 @@
+/* --- CONTACT BOX SPECIFIC STYLES --- */
+.contact-box {
+    background: #fafafa;
+    padding: 25px;
+    border-radius: 8px;
+    border: 1px solid #eee;
+    margin-top: 30px;
+}
+
+.contact-box p {
+    margin-bottom: 10px;
+    font-size: 15px;
+}
+
+.contact-box strong {
+    color: var(--primary, #1a1a1a);
+    display: inline-block;
+    width: 140px;
+}
+
+@media (max-width: 767px) {
+    .contact-box strong { 
+        display: block; 
+        width: auto; 
+        margin-bottom: 5px; 
+        margin-top: 80px;
+    }
+}

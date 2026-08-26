@@ -1,0 +1,631 @@
+/* =========================================
+   SELLER LANDING — MINIMALIST WARM SAND
+   Cream · Sand · Taupe · Cocoa Brown
+   ========================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+.seller-landing-container,
+.seller-form-page {
+    --ws-cream: #faf8f5;
+    --ws-sand: #f0ebe3;
+    --ws-taupe: #c9b99a;
+    --ws-brown: #8b7355;
+    --ws-ink: #2d2a26;
+    --ws-body: #5a5651;
+    --ws-line: #e5ded4;
+    --ws-muted: #f7f4f0;
+
+    --ws-radius: 14px;
+    --ws-radius-sm: 8px;
+    --ws-shadow: 0 1px 3px rgba(45, 42, 38, 0.04), 0 12px 28px -14px rgba(45, 42, 38, 0.12);
+
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: var(--ws-ink);
+    background-color: var(--ws-cream);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.seller-landing-container *,
+.seller-form-page * {
+    box-sizing: border-box;
+}
+
+/* --- Shared bits --- */
+.seller-eyebrow {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ws-brown);
+    margin-bottom: 18px;
+}
+
+.seller-eyebrow-center {
+    display: block;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.seller-eyebrow-light {
+    color: var(--ws-brown);
+    padding: 8px 16px;
+    border: 1px solid var(--ws-line);
+    border-radius: 999px;
+    background: var(--ws-cream);
+}
+
+/* --- Hero --- */
+.seller-hero {
+    position: relative;
+    overflow: hidden;
+    padding: 110px 24px 100px;
+    text-align: center;
+    background: var(--ws-cream);
+    border-bottom: 1px solid var(--ws-line);
+}
+
+.seller-hero-inner {
+    position: relative;
+    max-width: 760px;
+    margin: 0 auto;
+}
+
+.seller-hero h1 {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: clamp(2.2rem, 5.5vw, 3.6rem);
+    line-height: 1.12;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    color: var(--ws-ink);
+    margin: 0 0 20px;
+}
+
+.seller-hero p {
+    font-size: 1.05rem;
+    line-height: 1.7;
+    color: var(--ws-body);
+    max-width: 580px;
+    margin: 0 auto 34px;
+}
+
+.seller-hero-actions {
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* --- Buttons --- */
+.seller-btn-primary {
+    padding: 14px 28px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    background: var(--ws-ink);
+    color: var(--ws-cream);
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease, opacity 0.2s ease;
+    box-shadow: none;
+}
+
+.seller-btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    background: var(--ws-brown);
+}
+
+.seller-btn-primary:disabled {
+    background: var(--ws-taupe);
+    color: rgba(255, 255, 255, 0.7);
+    cursor: not-allowed;
+    opacity: 0.8;
+}
+
+.seller-btn-block {
+    width: 100%;
+    display: block;
+}
+
+.seller-btn-ghost {
+    padding: 14px 28px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    background: transparent;
+    color: var(--ws-ink);
+    border: 1px solid var(--ws-line);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+.seller-btn-ghost:hover {
+    background: var(--ws-sand);
+    border-color: var(--ws-taupe);
+    transform: translateY(-2px);
+}
+
+/* --- Trust strip --- */
+.seller-trust-strip {
+    margin-top: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 36px;
+    flex-wrap: wrap;
+}
+
+.trust-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    text-align: center;
+}
+
+.trust-item strong {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: var(--ws-ink);
+}
+
+.trust-item span {
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ws-body);
+}
+
+.trust-divider {
+    width: 1px;
+    height: 30px;
+    background: var(--ws-line);
+}
+
+/* --- Sections --- */
+.seller-section {
+    padding: 90px 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.seller-section-title {
+    text-align: center;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: clamp(1.7rem, 3.2vw, 2.2rem);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--ws-ink);
+    margin: 0 0 48px;
+}
+
+/* --- Benefits --- */
+.benefits-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+}
+
+.benefit-card {
+    padding: 40px 32px;
+    background: var(--ws-cream);
+    border: 1px solid var(--ws-line);
+    border-radius: var(--ws-radius);
+    text-align: left;
+    box-shadow: var(--ws-shadow);
+    transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.benefit-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--ws-taupe);
+    box-shadow: 0 16px 36px -16px rgba(45, 42, 38, 0.16);
+}
+
+.benefit-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    margin-bottom: 20px;
+    border-radius: 12px;
+    background: var(--ws-sand);
+    border: 1px solid var(--ws-line);
+}
+
+.benefit-badge i {
+    font-size: 18px;
+    color: var(--ws-brown);
+}
+
+.benefit-card h3 {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0 0 10px;
+    color: var(--ws-ink);
+}
+
+.benefit-card p {
+    color: var(--ws-body);
+    font-size: 0.95rem;
+    line-height: 1.65;
+    margin: 0;
+}
+
+/* --- How It Works --- */
+.steps-wrapper {
+    background: var(--ws-sand);
+    border-top: 1px solid var(--ws-line);
+    border-bottom: 1px solid var(--ws-line);
+}
+
+.steps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 28px;
+    position: relative;
+}
+
+.step-item {
+    position: relative;
+    text-align: left;
+    background: var(--ws-cream);
+    border: 1px solid var(--ws-line);
+    border-radius: var(--ws-radius);
+    padding: 32px;
+    box-shadow: var(--ws-shadow);
+}
+
+.step-number {
+    width: 44px;
+    height: 44px;
+    margin: 0 0 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--ws-cream);
+    background: var(--ws-brown);
+    box-shadow: none;
+}
+
+.step-item h4 {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 0 0 8px;
+    color: var(--ws-ink);
+}
+
+.step-item p {
+    color: var(--ws-body);
+    font-size: 0.93rem;
+    line-height: 1.65;
+    margin: 0;
+}
+
+@media (min-width: 860px) {
+    .steps-grid {
+        gap: 20px;
+    }
+
+    .step-item:not(:last-child)::after {
+        display: none;
+    }
+}
+
+/* --- Closing CTA --- */
+.seller-cta-band {
+    padding: 80px 24px;
+    text-align: center;
+    background: var(--ws-ink);
+    color: var(--ws-cream);
+}
+
+.seller-cta-inner {
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+.seller-cta-band h2 {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: clamp(1.6rem, 3.2vw, 2.2rem);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin: 0 0 12px;
+    color: var(--ws-cream);
+}
+
+.seller-cta-band p {
+    color: var(--ws-taupe);
+    font-size: 1rem;
+    margin: 0 0 30px;
+}
+
+/* =========================================
+   REGISTRATION FORM
+   ========================================= */
+.seller-form-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 56px 20px;
+    background: var(--ws-sand);
+}
+
+.seller-form-shell {
+    width: 100%;
+    max-width: 620px;
+}
+
+.seller-back-link {
+    background: none;
+    border: none;
+    color: var(--ws-body);
+    cursor: pointer;
+    margin-bottom: 16px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 0.88rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: color 0.2s ease, gap 0.2s ease;
+}
+
+.seller-back-link:hover {
+    color: var(--ws-brown);
+    gap: 12px;
+}
+
+.seller-form-card {
+    background: var(--ws-cream);
+    border: 1px solid var(--ws-line);
+    border-radius: var(--ws-radius);
+    box-shadow: var(--ws-shadow);
+    overflow: hidden;
+}
+
+.seller-form-header {
+    padding: 34px 36px 26px;
+    text-align: center;
+    background: var(--ws-cream);
+    border-bottom: 1px solid var(--ws-line);
+}
+
+.seller-form-title {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 1.6rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin: 0 0 8px;
+    color: var(--ws-ink);
+}
+
+.seller-form-subtitle {
+    font-size: 0.9rem;
+    color: var(--ws-body);
+    margin: 0 0 20px;
+}
+
+.seller-progress {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+
+.seller-progress-bar {
+    width: 48px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--ws-sand);
+}
+
+.seller-progress-bar.is-active {
+    background: var(--ws-brown);
+}
+
+.seller-form-body {
+    padding: 32px 36px 38px;
+}
+
+.form-grid-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.form-group {
+    margin-bottom: 18px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--ws-ink);
+    margin-bottom: 8px;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 12px 14px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 0.95rem;
+    color: var(--ws-ink);
+    background: var(--ws-cream);
+    border: 1px solid var(--ws-line);
+    border-radius: var(--ws-radius-sm);
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.form-group input::placeholder {
+    color: #aaa39a;
+}
+
+.form-group input:focus {
+    background: #fff;
+    border-color: var(--ws-taupe);
+    box-shadow: 0 0 0 3px rgba(201, 185, 154, 0.2);
+}
+
+.form-notice {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 16px 18px;
+    margin: 4px 0 24px;
+    background: var(--ws-muted);
+    border: 1px solid var(--ws-line);
+    border-left: 3px solid var(--ws-taupe);
+    border-radius: var(--ws-radius-sm);
+}
+
+.form-notice i {
+    color: var(--ws-brown);
+    font-size: 16px;
+    margin-top: 2px;
+}
+
+.form-notice p {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--ws-body);
+}
+
+.form-notice strong {
+    color: var(--ws-ink);
+}
+
+.seller-form-legal {
+    margin: 16px 0 0;
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--ws-body);
+}
+
+.seller-form-legal i {
+    margin-right: 6px;
+}
+
+.auth-error {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    background: #faf0ed;
+    border: 1px solid #e8d5ce;
+    border-radius: var(--ws-radius-sm);
+    color: #8b5a50;
+    font-size: 0.87rem;
+}
+
+/* --- Success state --- */
+.success-card {
+    padding: 48px 36px 44px;
+    text-align: center;
+}
+
+.success-medallion {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--ws-sand);
+    border: 1px solid var(--ws-line);
+    box-shadow: none;
+}
+
+.success-medallion i {
+    font-size: 32px;
+    color: var(--ws-brown);
+}
+
+.success-card h2 {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 1.55rem;
+    font-weight: 600;
+    margin: 0 0 12px;
+    color: var(--ws-ink);
+}
+
+.success-card p {
+    color: var(--ws-body);
+    font-size: 0.95rem;
+    line-height: 1.65;
+    max-width: 400px;
+    margin: 0 auto 28px;
+}
+
+.btn-success {
+    padding: 14px 28px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--ws-cream);
+    background: var(--ws-ink);
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease;
+    box-shadow: none;
+}
+
+.btn-success:hover {
+    transform: translateY(-2px);
+    background: var(--ws-brown);
+}
+
+/* --- Responsive --- */
+@media (max-width: 640px) {
+    .seller-hero {
+        padding: 84px 20px 72px;
+    }
+
+    .seller-section {
+        padding: 64px 20px;
+    }
+
+    .form-grid-row {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+
+    .seller-form-header,
+    .seller-form-body,
+    .success-card {
+        padding-left: 24px;
+        padding-right: 24px;
+    }
+
+    .seller-btn-primary,
+    .seller-btn-ghost {
+        width: 100%;
+    }
+
+    .trust-divider {
+        display: none;
+    }
+
+    .trust-item strong {
+        font-size: 1.25rem;
+    }
+}

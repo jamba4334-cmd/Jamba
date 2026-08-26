@@ -1,0 +1,309 @@
+/* =========================================
+   ADDRESS CSS — ULTRA COMPACT WARM SAND
+   ========================================= */
+
+.address-container { 
+  --ws-bg: #ffffff;
+  --ws-surface: #ffffff;
+  --ws-sand: #f0ebe3;
+  --ws-line: #e6dfd4;
+  --ws-accent: #c9b99a;
+  --ws-cocoa: #8b7355;
+  --ws-ink: #2b2620;
+  --ws-muted: #8a8178;
+
+  max-width: 600px; /* Slimmer max-width */
+  margin: 25px auto 40px; /* Reduced top and bottom margins */
+  padding: 0 20px; 
+  flex: 1; 
+  width: 100%; 
+  box-sizing: border-box; 
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--ws-ink);
+}
+
+.page-header { 
+  display: flex; 
+  justify-content: center; 
+  align-items: flex-end; 
+  margin-bottom: 20px; /* Tighter margin */
+}
+
+.page-title { 
+  font-size: 20px; /* Scaled down slightly */
+  font-weight: 800;
+  letter-spacing: 0.05em; 
+  text-transform: uppercase; 
+  margin: 0; 
+  border-bottom: 2px solid var(--ws-ink);
+  padding-bottom: 8px;
+}
+
+/* --- LIST VIEW STYLES --- */
+.address-list-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px; /* Tighter gap */
+}
+
+.address-list-card {
+  background: var(--ws-surface); 
+  border: 1px solid var(--ws-line);
+  border-radius: 12px;
+  padding: 16px 20px; /* Less padding */
+  display: flex;
+  flex-direction: column; 
+  position: relative;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(43, 38, 32, 0.03);
+}
+
+.address-list-card:hover {
+  background: var(--ws-sand);
+  border-color: var(--ws-accent);
+}
+
+.empty-address-msg {
+  text-align: center;
+  padding: 30px 0;
+  color: var(--ws-muted);
+  font-size: 14px;
+}
+
+.address-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--ws-line);
+  padding-bottom: 8px;
+}
+
+.addr-type-badge {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ws-ink);
+  background: var(--ws-line);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.addr-delete-btn {
+  background: transparent; 
+  color: var(--ws-muted);
+  border: none;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.addr-delete-btn:hover {
+  color: #b4544a; 
+  background-color: #fdf2f2; 
+}
+
+.address-card-content { margin-bottom: 0px; }
+.addr-name { margin: 0 0 6px 0; font-weight: 800; font-size: 15px; color: var(--ws-ink); text-transform: capitalize; }
+.addr-line { margin: 0 0 4px 0; font-size: 13px; color: var(--ws-cocoa); line-height: 1.4; }
+
+.add-new-addr-btn {
+  width: 100%;
+  padding: 14px;
+  background: transparent;
+  color: var(--ws-ink);
+  border: 1.5px dashed var(--ws-accent);
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  margin-top: 5px;
+  transition: all 0.2s ease;
+}
+
+.add-new-addr-btn:hover {
+  border-style: solid;
+  border-color: var(--ws-ink);
+  background: var(--ws-sand);
+}
+
+/* --- FORM VIEW STYLES (COMPACT) --- */
+.address-card.form-layout-wrapper { 
+  background: var(--ws-surface); 
+  padding: 24px; /* Reduced from 32px */
+  border-radius: 12px; 
+  border: 1px solid var(--ws-line); 
+  box-shadow: 0 8px 24px -8px rgba(43, 38, 32, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+.form-header-box h2 {
+  margin: 0 0 6px 0;
+  font-size: 16px; /* Smaller header */
+  color: var(--ws-ink);
+}
+
+.helper-text {
+  font-size: 12px; /* Smaller helper text */
+  margin-top: 0;
+  margin-bottom: 16px; /* Reduced margin */
+  color: var(--ws-muted);
+}
+
+.address-form-strict {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.input-group { 
+  margin-bottom: 12px; /* Super tight margin */
+  display: flex;
+  flex-direction: column;
+}
+
+.input-group label { 
+  font-size: 10px; /* Slimmer labels */
+  font-weight: 800; 
+  margin-bottom: 4px; 
+  color: var(--ws-ink); 
+  text-transform: uppercase; 
+  letter-spacing: 0.05em; 
+}
+
+.input-field { 
+  width: 100%; 
+  padding: 10px 12px; /* Compact padding */
+  border: 1px solid var(--ws-line); 
+  border-radius: 6px; 
+  font-size: 13px; /* Smaller font inside inputs */
+  box-sizing: border-box; 
+  transition: 0.2s ease; 
+  background-color: #faf9f6; 
+  color: var(--ws-ink); 
+  font-family: inherit;
+}
+
+.input-field:focus { 
+  border-color: var(--ws-ink); 
+  background-color: var(--ws-surface);
+  outline: none; 
+}
+
+/* 🔥 The Grid System for Compact Spacing */
+.grid-2 { 
+  display: grid; 
+  grid-template-columns: 1fr 1fr; 
+  gap: 12px; 
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.btn { 
+  padding: 12px 16px; /* Tighter button padding */
+  border: none; 
+  border-radius: 6px; 
+  font-weight: 800; 
+  font-size: 12px; 
+  text-transform: uppercase; 
+  letter-spacing: 0.05em; 
+  cursor: pointer; 
+  transition: all 0.2s ease; 
+  text-align: center; 
+}
+
+.btn:active { transform: scale(0.98); }
+
+.action-buttons { 
+  display: grid; 
+  grid-template-columns: 1fr 2fr; 
+  gap: 10px; 
+  margin-top: 10px; /* Very close to the inputs */
+  padding-top: 16px;
+  border-top: 1px solid var(--ws-line);
+}
+
+.cancel-btn { 
+  background: var(--ws-sand); 
+  color: var(--ws-ink); 
+  border: 1px solid var(--ws-line);
+}
+.cancel-btn:hover { background: var(--ws-line); }
+
+.save-btn { 
+  background: var(--ws-ink); 
+  color: var(--ws-surface); 
+}
+.save-btn:hover:not(:disabled) {
+  background: #111;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(43, 38, 32, 0.2);
+}
+
+.ws-loading-state, .ws-empty-state {
+  text-align: center;
+  margin-top: 120px;
+}
+
+.ws-primary-btn {
+  padding: 12px 24px;
+  background: #2b2620;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  margin-top: 20px;
+}
+
+/* 🔥 Mobile Layout Adjustments */
+@media (max-width: 768px) {
+  .address-container { 
+    margin-top: 85px; 
+    margin-bottom: 20px;
+  }
+  .address-card.form-layout-wrapper { 
+    padding: 16px; /* Minimum padding for max space */
+  }
+  
+  /* Keep inputs side-by-side to save vertical real estate */
+  .grid-2 { 
+    grid-template-columns: 1fr 1fr; 
+    gap: 10px; 
+  }
+  
+  /* Adjust 3-col to a 2-col wrap on small phones */
+  .grid-3 { 
+    grid-template-columns: 1fr 1fr; 
+    gap: 10px; 
+  }
+  
+  /* State input spans the full bottom row */
+  .full-width-mob { 
+    grid-column: span 2; 
+  }
+  
+  .input-group { 
+    margin-bottom: 10px; 
+  }
+  .action-buttons { 
+    grid-template-columns: 1fr; 
+    margin-top: 6px; 
+    gap: 8px;
+  }
+}
