@@ -1,0 +1,27 @@
+# Secrets
+firebase-key.json
+.env
+.env.local
+.env.*
+.dev.vars
+
+# Cloudflare
+.wrangler/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.npm/
+
+# Backend
+__pycache__/
+*.pyc
+venv/
+env/
+.venv/
+
+# Logs & System
+logs/
+*.log
+.DS_Store
