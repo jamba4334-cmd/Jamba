@@ -34,7 +34,7 @@ export default function SiteSettings({ getAuthHeaders, storage, db }) {
 
     const [activeBannerSlides, setActiveBannerSlides] = useState({});
     
-    // 🔥 FIX: Track exact component ID that is uploading
+    // Track exact component ID that is uploading
     const [uploadingId, setUploadingId] = useState(null);
     
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -47,11 +47,17 @@ export default function SiteSettings({ getAuthHeaders, storage, db }) {
     const [storeCategories, setStoreCategories] = useState([]);
     const [newCategoryName, setNewCategoryName] = useState("");
 
+    // 🔥 BRAND AUTO-SELECT STATES
+    const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
+    const [allBrands, setAllBrands] = useState([]);
+    const [isLoadingBrands, setIsLoadingBrands] = useState(true);
+
     useEffect(() => {
         loadSiteSettings();
         fetchStoreProducts(); 
         fetchCategories(); 
         fetchLoginConfig(); 
+        fetchPublishedBrands(); // Initialize brand fetch
     }, []);
 
     const loadSiteSettings = async () => {
@@ -101,6 +107,27 @@ export default function SiteSettings({ getAuthHeaders, storage, db }) {
             console.error("Error fetching products:", error);
         } finally {
             setIsLoadingProducts(false);
+        }
+    };
+
+    // 🔥 FETCH PUBLISHED SAAS BRANDS
+    const fetchPublishedBrands = async () => {
+        setIsLoadingBrands(true);
+        try {
+            const snap = await getDocs(collection(db, "seller_profiles"));
+            const brandsList = [];
+            snap.forEach(docSnap => {
+                const data = docSnap.data();
+                // Only include sellers that have set up a vanity handle in their WYSIWYG Storefront Editor
+                if (data.storefront && data.storefront.vanityHandle) {
+                    brandsList.push({ id: docSnap.id, ...data });
+                }
+            });
+            setAllBrands(brandsList);
+        } catch (error) {
+            console.error("Error fetching brands:", error);
+        } finally {
+            setIsLoadingBrands(false);
         }
     };
 
@@ -663,11 +690,15 @@ export default function SiteSettings({ getAuthHeaders, storage, db }) {
 
                                                 <div className="row-item" style={{ justifyContent: "center" }}>
                                                     {block.shape === "circle" ? (
-                                                        <label className="upload-box circle" style={{ borderStyle: "solid", background: "transparent" }}><i className="fa-solid fa-plus" style={{ fontSize: "24px" }}></i>
-                                                            <input type="file" style={{ display: "none" }} onChange={async (e) => { const { url } = await uploadToCloudinary(e.target.files[0]); updateBlock(block.id, { items: [...block.items, { image: url, name: "", link: "" }] }); }} />
-                                                        </label>
+                                                        <div 
+                                                            className="upload-box circle" 
+                                                            style={{ borderStyle: "solid", background: "transparent", cursor: "pointer" }}
+                                                            onClick={() => { setActiveBlockForModal(block.id); setIsBrandModalOpen(true); }}
+                                                        >
+                                                            <i className="fa-solid fa-plus" style={{ fontSize: "24px" }}></i>
+                                                        </div>
                                                     ) : (
-                                                        <div className="upload-box rectangle" style={{ borderStyle: "solid", background: "transparent", height: "100%", minHeight: "160px" }} onClick={() => { setActiveBlockForModal(block.id); setIsModalOpen(true); }}><i className="fa-solid fa-plus" style={{ fontSize: "24px" }}></i></div>
+                                                        <div className="upload-box rectangle" style={{ borderStyle: "solid", background: "transparent", height: "100%", minHeight: "160px", cursor: "pointer" }} onClick={() => { setActiveBlockForModal(block.id); setIsModalOpen(true); }}><i className="fa-solid fa-plus" style={{ fontSize: "24px" }}></i></div>
                                                     )}
                                                 </div>
                                             </div>
@@ -741,7 +772,7 @@ export default function SiteSettings({ getAuthHeaders, storage, db }) {
                             <div className="add-options">
                                 <button className="option-btn" onClick={() => addBlock("promo-banner")}><i className="fa-solid fa-rectangle-ad"></i> Promo Banner</button>
                                 <button className="option-btn" onClick={() => addBlock("row", "rectangle")}><i className="fa-regular fa-square"></i> Product Cards</button>
-                                <button className="option-btn" onClick={() => addBlock("row", "circle")}><i className="fa-regular fa-circle"></i> Circle Row</button>
+                                <button className="option-btn" onClick={() => addBlock("row", "circle")}><i className="fa-regular fa-circle"></i> Featured Brands</button>
                                 <button className="option-btn" onClick={loadWireframeTemplate}><i className="fa-solid fa-pen-nib"></i> Load Wireframe</button>
                             </div>
                         )}
@@ -749,7 +780,7 @@ export default function SiteSettings({ getAuthHeaders, storage, db }) {
                 </>
             )}
 
-            {/* PRODUCT MODAL */}
+            {/* PRODUCT MODAL (For Rectangle Blocks) */}
             {isModalOpen && (
                 <div className="product-modal-overlay" onClick={() => setIsModalOpen(false)}>
                     <div className="product-modal" onClick={e => e.stopPropagation()}>
@@ -757,7 +788,7 @@ export default function SiteSettings({ getAuthHeaders, storage, db }) {
                             <h3>Select a Product</h3>
                             <button className="modal-close-btn" onClick={() => setIsModalOpen(false)}><i className="fa-solid fa-xmark"></i></button>
                         </div>
-                        <input type="text" className="product-search-input" placeholder="Search..." onChange={e => setSearchTerm(e.target.value)} />
+                        <input type="text" className="product-search-input" placeholder="Search products..." onChange={e => setSearchTerm(e.target.value)} />
 
                         <div className="product-grid">
                             {isLoadingProducts ? (
@@ -778,6 +809,74 @@ export default function SiteSettings({ getAuthHeaders, storage, db }) {
                                         <p>{prod.title}</p>
                                     </div>
                                 ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 🔥 BRAND SELECTOR MODAL (For Circle Blocks) */}
+            {isBrandModalOpen && (
+                <div className="product-modal-overlay" onClick={() => setIsBrandModalOpen(false)}>
+                    <div className="product-modal" onClick={e => e.stopPropagation()}>
+                        
+                        <div className="product-modal-header">
+                            <h3>Select a Featured Brand</h3>
+                            <button className="modal-close-btn" onClick={() => setIsBrandModalOpen(false)}>
+                                <i className="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+
+                        <input 
+                            type="text" 
+                            className="product-search-input" 
+                            placeholder="Search seller brands..." 
+                            onChange={e => setSearchTerm(e.target.value)} 
+                        />
+
+                        <div className="product-grid">
+                            {isLoadingBrands ? (
+                                <p style={{ padding: "20px", color: "#8a8178", textAlign: "center", gridColumn: "1 / -1" }}>
+                                    <i className="fa-solid fa-spinner fa-spin"></i> Scanning sellers...
+                                </p>
+                            ) : allBrands.length === 0 ? (
+                                <p style={{ padding: "20px", color: "#b4544a", textAlign: "center", gridColumn: "1 / -1", fontWeight: "bold" }}>
+                                    No published brand storefronts found. Sellers must configure their vanity handle first!
+                                </p>
+                            ) : (
+                                allBrands.filter(b => b.brandName?.toLowerCase().includes((searchTerm || "").toLowerCase())).map(brand => {
+                                    // Extract the best image (Storefront Logo > Storefront Banner > Auth Profile Photo > Fallback)
+                                    const brandImg = brand.storefront?.brandLogo || brand.storefront?.bannerUrl || brand.profilePhoto || "https://via.placeholder.com/150";
+                                    const vanityLink = `/shop/${brand.storefront.vanityHandle}`;
+                                    const displayName = brand.storefront?.brandName || brand.brandName;
+
+                                    return (
+                                        <div key={brand.id} className="product-select-card" onClick={() => {
+                                            // Auto-fill the circle block with the seller's actual data
+                                            setHomeBlocks(prev => prev.map(b => b.id === activeBlockForModal ? { 
+                                                ...b, 
+                                                items: [...b.items, { 
+                                                    name: displayName, 
+                                                    image: brandImg, 
+                                                    link: vanityLink 
+                                                }] 
+                                            } : b));
+                                            
+                                            setIsBrandModalOpen(false); 
+                                            setSearchTerm("");
+                                        }}>
+                                            <img 
+                                                src={brandImg} 
+                                                alt={displayName} 
+                                                style={{ borderRadius: '50%', width: '90px', height: '90px', objectFit: 'cover', margin: '0 auto 10px', display: 'block' }} 
+                                            />
+                                            <p style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '13px' }}>{displayName}</p>
+                                            <p style={{ fontSize: '10px', color: 'var(--ws-muted)', textAlign: 'center', margin: '4px 0 0' }}>
+                                                {vanityLink}
+                                            </p>
+                                        </div>
+                                    );
+                                })
                             )}
                         </div>
                     </div>

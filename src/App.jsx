@@ -24,6 +24,7 @@ import UnifiedCategory from './pages/UnifiedCategory';
 
 import SellerLanding from './admin/SellerLanding';
 import SellerPortal from './admin/Seller';
+import BrandStorefront from './pages/BrandStorefront'; 
 
 // Pointing to your nested AdminLayout file
 const SuperAdmin = lazy(() => import('./super_admin/Admin/AdminLayout')); 
@@ -71,6 +72,9 @@ function App() {
           <Route path="order-success" element={<OrderSuccess />} />
           <Route path="search" element={<SearchResults />} />
           <Route path="sell-with-us" element={<SellerLanding />} />
+          
+          {/* 🔥 UPDATED: Dynamic routing for Custom Brand Storefronts using vanity handles */}
+          <Route path="shop/:vanityHandle" element={<BrandStorefront />} />
         </Route>
 
         <Route path="*" element={<div style={{padding: '50px', textAlign: 'center'}}><h2>404 - Page Not Found</h2></div>} />

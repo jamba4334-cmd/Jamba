@@ -115,7 +115,7 @@ export default function Home() {
   const [homeBlocks, setHomeBlocks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // --- NEW: Network State ---
+  // --- Network State ---
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [fetchError, setFetchError] = useState(false);
 
@@ -183,7 +183,7 @@ export default function Home() {
     );
   }
 
-  // --- NEW: Offline View ---
+  // --- Offline View ---
   if (isOffline || fetchError) {
       return (
           <div className="home-container">
@@ -227,7 +227,7 @@ export default function Home() {
               return <PromoCarousel key={block.id} block={block} />;
           }
           
-          // Render Circle Row
+          // Render Circle Row (Featured Brands)
           if (block.type === 'row' && block.shape === 'circle') {
               return (
                   <div key={block.id} className="circle-row-wrapper" style={{ backgroundColor: block.bgColor || 'transparent' }}>
@@ -239,14 +239,30 @@ export default function Home() {
                       )}
 
                       <div className="circle-scroll">
-                          {block.items.map((item, idx) => (
-                              <div key={idx} className="circle-item" onClick={() => navigate(item.link ? `/${item.link.replace(/^\/+/, '')}` : '/category/all')}>
-                                  <div className="circle-img-wrapper">
-                                      <img src={item.image} alt={item.name} />
+                          {block.items.map((item, idx) => {
+                              // 🔥 NEW LOGIC: Check if this is a direct brand shop link 
+                              // (starts with /shop/) or a generic category link
+                              const handleClick = () => {
+                                  if (!item.link) {
+                                      navigate('/category/all');
+                                  } else if (item.link.startsWith('/shop/')) {
+                                      // It is a Vanity Storefront! Go straight there.
+                                      navigate(item.link);
+                                  } else {
+                                      // It is a standard category or product link
+                                      navigate(`/${item.link.replace(/^\/+/, '')}`);
+                                  }
+                              };
+
+                              return (
+                                  <div key={idx} className="circle-item" onClick={handleClick}>
+                                      <div className="circle-img-wrapper">
+                                          <img src={item.image} alt={item.name} />
+                                      </div>
+                                      <p className="circle-name">{item.name}</p>
                                   </div>
-                                  <p className="circle-name">{item.name}</p>
-                              </div>
-                          ))}
+                              );
+                          })}
                       </div>
                   </div>
               );
