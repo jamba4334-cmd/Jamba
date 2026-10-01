@@ -1,16 +1,15 @@
 /* ============================================================
-   BrandStorefront.css — Customer-Facing Visuals (Match Mockup)
+   BrandStorefront.css — Customer-Facing Visuals
    ============================================================ */
 
 .public-storefront-wrapper {
-    background-color: #faf9f6; /* Very light off-white from image */
+    background-color: #faf9f6; 
     min-height: 100vh;
     font-family: 'Inter', sans-serif;
     color: #000;
     padding-bottom: 60px;
 }
 
-/* ---------- 1. BRAND HEADER ---------- */
 .storefront-brand-header {
     display: flex;
     flex-direction: column;
@@ -37,7 +36,6 @@
     letter-spacing: 0.05em;
 }
 
-/* ---------- 2. SECTION TITLES ---------- */
 .section-main-title {
     font-size: 22px;
     font-weight: 900;
@@ -51,13 +49,18 @@
 .storefront-modules-container { max-width: 1200px; margin: 0 auto; }
 .storefront-module { margin-bottom: 20px; }
 
-/* ---------- 3. MAIN BANNER ---------- */
+/* ---------- BANNER CAROUSELS ---------- */
 .public-main-banner {
     position: relative;
     width: 100%;
     height: 350px;
     background: #f5f5f5;
     overflow: hidden;
+}
+.public-small-banner {
+    padding: 0 16px;
+    margin: 20px 0;
+    border-radius: 12px; 
 }
 .banner-slide {
     position: absolute;
@@ -68,20 +71,19 @@
 .banner-slide.active { opacity: 1; z-index: 1; }
 .banner-slide img, .banner-slide video { width: 100%; height: 100%; object-fit: cover; }
 
-/* ---------- 4. CATEGORIES ROW ---------- */
+/* ---------- CATEGORIES ROW ---------- */
 .public-category-row {
     background: #faf9f6;
     padding: 0;
 }
-
 .category-divider {
-    border-top: 1.5px solid #5f7d5a; /* Green line from sketch */
+    border-top: 1.5px solid #5f7d5a; 
     text-align: center;
     margin: 30px 20px 10px;
     position: relative;
 }
 .category-pill {
-    background: #8b7355; /* Brown color from sketch */
+    background: #8b7355; 
     color: #fff;
     padding: 4px 18px;
     border-radius: 999px;
@@ -97,11 +99,8 @@
     display: flex;
     gap: 20px;
     overflow-x: auto;
-    padding: 10px 20px 20px;
-    scrollbar-width: none; 
+    padding: 10px 20px 24px; /* Added more padding for scrollbars */
 }
-.category-scroll-area::-webkit-scrollbar { display: none; }
-
 .category-item {
     display: flex;
     flex-direction: column;
@@ -120,7 +119,7 @@
 .category-image img { width: 100%; height: 100%; object-fit: cover; }
 .category-text { font-size: 12px; font-weight: 600; }
 
-/* ---------- 5. PRODUCT VIEW (TRENDING) ---------- */
+/* ---------- PRODUCT VIEW (TRENDING & BUBBLES) ---------- */
 .public-product-view {
     background: #faf9f6;
     padding: 0;
@@ -130,15 +129,14 @@
     display: flex;
     gap: 16px;
     overflow-x: auto;
-    padding: 10px 16px 30px;
-    scrollbar-width: none;
+    padding: 4px 0 24px; /* Added more padding so the scrollbar doesn't clip images */
 }
-.product-view-grid::-webkit-scrollbar { display: none; }
 
 .storefront-product-card {
     background: #fff;
     border-radius: 12px;
     width: 160px;
+    flex-shrink: 0; /* Prevents squishing and forces independent horizontal scrolling */
     text-decoration: none;
     color: inherit;
     overflow: hidden;
@@ -154,9 +152,7 @@
 }
 .product-card-image img { width: 100%; height: 100%; object-fit: cover; }
 
-.product-card-details {
-    padding: 12px;
-}
+.product-card-details { padding: 12px; }
 .product-name {
     margin: 0 0 8px 0;
     font-size: 11px;
@@ -167,7 +163,7 @@
     text-overflow: ellipsis;
 }
 .product-price-pill {
-    background: #8b7355; /* Match brown pill color from image */
+    background: #8b7355; 
     color: #fff;
     border-radius: 999px;
     padding: 4px 12px;
@@ -176,14 +172,16 @@
     display: inline-block;
 }
 
-/* ---------- 6. SMALL BANNER ---------- */
-.public-small-banner {
-    padding: 0 16px;
-    margin: 20px 0;
+/* ---------- CUSTOM VISIBLE SCROLLBARS (For Desktop Users) ---------- */
+.category-scroll-area, .product-view-grid {
+    scrollbar-width: thin; /* Firefox */
 }
-.public-small-banner img {
-    width: 100%;
-    height: auto;
-    max-height: 200px;
-    object-fit: cover;
+.category-scroll-area::-webkit-scrollbar, 
+.product-view-grid::-webkit-scrollbar {
+    height: 8px; /* Restores the scrollbar thickness for Chrome/Safari */
+}
+.category-scroll-area::-webkit-scrollbar-thumb, 
+.product-view-grid::-webkit-scrollbar-thumb {
+    background: #d4cfc7;
+    border-radius: 10px;
 }
