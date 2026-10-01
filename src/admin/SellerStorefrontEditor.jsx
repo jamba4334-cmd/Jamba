@@ -14,6 +14,8 @@ export default function SellerStorefrontEditor() {
     const [brandName, setBrandName] = useState('');
     const [brandLogo, setBrandLogo] = useState('');
     const [modules, setModules] = useState([]);
+    
+    // Holds the categories created by Super Admin in Site Settings
     const [storeCategories, setStoreCategories] = useState([]);
 
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -138,6 +140,14 @@ export default function SellerStorefrontEditor() {
         setModules(modules.map(m => m.id === modId ? { ...m, items: [...(m.items || []), { id: genId(), image: url, text: 'Item', shape }] } : m));
     };
 
+    const removeCategoryItem = (modId, itemId) => {
+        setModules(modules.map(m => {
+            if (m.id !== modId) return m;
+            const updatedItems = m.items.filter(i => i.id !== itemId);
+            return { ...m, items: updatedItems };
+        }));
+    };
+
     const updateCategoryItem = (modId, itemId, text) => {
         setModules(modules.map(m => m.id === modId ? { ...m, items: m.items.map(i => i.id === itemId ? { ...i, text } : i) } : m));
     };
@@ -220,33 +230,66 @@ export default function SellerStorefrontEditor() {
                             </div>
                         )}
 
-                        {/* CATEGORY ROW */}
-                        {mod.type === 'category_row' && (
-                            <div className="module-category">
-                                <select className="invisible-input category-title-select" value={mod.heading} onChange={(e) => updateModule(mod.id, 'heading', e.target.value)} style={{ fontSize: '16px', fontWeight: 'bold', textTransform: 'uppercase', width: '100%', borderBottom: '2px solid var(--ws-ink)', marginBottom: '20px' }}>
-                                    <option value="" disabled>Select Master Category...</option>
-                                    {storeCategories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
-                                    <option value="CUSTOM">Custom Title</option>
-                                </select>
-                                {mod.heading === 'CUSTOM' && (
-                                    <input type="text" className="invisible-input category-title" placeholder="Type custom heading..." onChange={(e) => updateModule(mod.id, 'heading', e.target.value)} style={{ width: '100%', borderBottom: '2px solid var(--ws-ink)', fontSize: '16px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '20px' }} />
-                                )}
-                                <div className="category-items-flex">
-                                    {mod.items?.map((item) => (
-                                        <div key={item.id} className="category-item-card">
-                                            <div className={`cat-image-frame ${item.shape}`}><img src={item.image} alt={item.text} /></div>
-                                            <input type="text" className="invisible-input cat-item-text" value={item.text} onChange={(e) => updateCategoryItem(mod.id, item.id, e.target.value)} />
+                        {/* CATEGORY ROW (STRICT SUPER ADMIN LINKING) */}
+                        {mod.type === 'category_row' && (() => {
+                            // Find the selected master category to pull its subcategories
+                            const selectedCatObj = storeCategories.find(c => c.name === mod.heading);
+                            const availableSubcats = selectedCatObj ? (selectedCatObj.subcategories || []) : [];
+
+                            return (
+                                <div className="module-category">
+                                    {/* Master Category Dropdown (NO CUSTOM TITLES ALLOWED) */}
+                                    <select 
+                                        className="invisible-input category-title-select" 
+                                        value={mod.heading} 
+                                        onChange={(e) => updateModule(mod.id, 'heading', e.target.value)} 
+                                        style={{ fontSize: '16px', fontWeight: 'bold', textTransform: 'uppercase', width: '100%', borderBottom: '2px solid var(--ws-ink)', marginBottom: '20px', cursor: 'pointer' }}
+                                    >
+                                        <option value="" disabled>Select Master Category...</option>
+                                        {storeCategories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
+                                    </select>
+                                    
+                                    <div className="category-items-flex">
+                                        {mod.items?.map((item) => (
+                                            <div key={item.id} className="category-item-card" style={{ position: 'relative' }}>
+                                                <button 
+                                                    className="item-delete-btn" 
+                                                    onClick={() => removeCategoryItem(mod.id, item.id)}
+                                                    style={{position: 'absolute', top: '-5px', right: '-5px', zIndex: 10, background: '#fff', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', color: '#dc2626', display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.1)'}}
+                                                ><i className="fa-solid fa-xmark"></i></button>
+
+                                                <div className={`cat-image-frame ${item.shape}`}><img src={item.image} alt={item.text} /></div>
+                                                
+                                                {/* Subcategory Dropdown (Restricted to Super Admin Subcats) */}
+                                                <select 
+                                                    className="invisible-input cat-item-text" 
+                                                    value={item.text} 
+                                                    onChange={(e) => updateCategoryItem(mod.id, item.id, e.target.value)}
+                                                    style={{ width: '90px', textAlign: 'center', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', padding: '2px' }}
+                                                >
+                                                    <option value="Item" disabled>Select...</option>
+                                                    {availableSubcats.length === 0 && <option value="" disabled>No Subcategories Found</option>}
+                                                    {availableSubcats.map((sub, i) => (
+                                                        <option key={i} value={sub}>{sub.toUpperCase()}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        ))}
+                                        
+                                        <div className="category-add-tools">
+                                            {mod.heading ? (
+                                                <label className="add-btn-circle circle" title="Add Circle Image">
+                                                    <i className="fa-solid fa-plus"></i>
+                                                    <input type="file" accept="image/*" style={{display:'none'}} onChange={(e) => { setUploadingTarget(mod.id); handleUpload(e, (url) => addCategoryItem(mod.id, url, 'circle')); }} />
+                                                </label>
+                                            ) : (
+                                                <div style={{fontSize: '10px', color: 'var(--ws-muted)'}}>Select Master Category First</div>
+                                            )}
                                         </div>
-                                    ))}
-                                    <div className="category-add-tools">
-                                        <label className="add-btn-circle circle" title="Add Circle Image">
-                                            <i className="fa-solid fa-plus"></i>
-                                            <input type="file" accept="image/*" style={{display:'none'}} onChange={(e) => { setUploadingTarget(mod.id); handleUpload(e, (url) => addCategoryItem(mod.id, url, 'circle')); }} />
-                                        </label>
                                     </div>
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })()}
 
                         {/* PRODUCT VIEW & DOUBLE PRODUCT VIEW */}
                         {(mod.type === 'product_single' || mod.type === 'product_double') && (
@@ -281,7 +324,6 @@ export default function SellerStorefrontEditor() {
                                     </div>
                                 ) : (
                                     <div className="double-row-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                        {/* Row 1 (Even Indexes) */}
                                         <div className="product-grid" style={{ overflowX: 'auto', display: 'flex', gap: '12px', paddingBottom: '16px', flexWrap: 'nowrap', alignItems: 'flex-start' }}>
                                             {mod.products?.filter((_, i) => i % 2 === 0).map((prod, pIdx) => {
                                                 const originalIndex = mod.products.indexOf(prod);
@@ -303,7 +345,6 @@ export default function SellerStorefrontEditor() {
                                                 <i className="fa-solid fa-plus"></i>
                                             </button>
                                         </div>
-                                        {/* Row 2 (Odd Indexes) */}
                                         <div className="product-grid" style={{ overflowX: 'auto', display: 'flex', gap: '12px', paddingBottom: '24px', flexWrap: 'nowrap', alignItems: 'flex-start' }}>
                                             {mod.products?.filter((_, i) => i % 2 !== 0).map((prod, pIdx) => {
                                                 const originalIndex = mod.products.indexOf(prod);
@@ -327,7 +368,7 @@ export default function SellerStorefrontEditor() {
                             </div>
                         )}
 
-                        {/* SMALL BANNER (UPGRADED TO CAROUSEL) */}
+                        {/* SMALL BANNER */}
                         {mod.type === 'small_banner' && (
                             <div className="module-main-banner" style={{ borderStyle: 'dashed' }}>
                                 <div className="banner-settings">
