@@ -1,5 +1,6 @@
 /* ============================================================
    SellerStorefrontEditor.css — Visual WYSIWYG Builder
+   Includes Full Desktop, Tablet, and Mobile Optimization
    ============================================================ */
 
 .wysiwyg-container {
@@ -14,16 +15,86 @@
     font-family: 'Inter', sans-serif;
 }
 
+/* ---------- FIXED LAYOUT GRID (TIER 1) ---------- */
 .wysiwyg-header-controls {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    max-width: 1600px;
+    margin: 0 auto 20px auto;
+}
+
+/* ---------- CLEAN STORE / PAGES TOGGLE ---------- */
+.store-pages-toggle {
+    display: flex;
+    background: #f0f0f0 !important; 
+    border-radius: 999px;
+    padding: 4px;
+    border: 1px solid #ddd;
+}
+.store-pages-toggle button {
+    border: none;
+    background: transparent;
+    padding: 8px 30px;
+    border-radius: 999px;
+    font-weight: 700;
+    color: #666;
+    cursor: pointer;
+    transition: 0.2s;
+    font-size: 14px;
+}
+.store-pages-toggle button.active {
+    background: #f3d052 !important; 
+    color: #000;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+/* ---------- ACTION BAR (TIER 2) ---------- */
+.wysiwyg-action-bar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    max-width: 900px;
-    margin: 0 auto 30px auto;
+    width: 100%;
+    max-width: 1600px;
+    margin: 0 auto 20px auto;
 }
 
+.wysiwyg-action-bar.center-action {
+    justify-content: center;
+}
+
+.action-bar-left { display: flex; align-items: center; flex: 1; }
+.action-bar-right { display: flex; align-items: center; justify-content: flex-end; flex: 1; }
+
+.save-publish-btn {
+    width: auto !important;
+    padding: 10px 24px;
+    border-radius: 8px;
+    white-space: nowrap;
+    background: #111;
+    color: #fff;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.save-publish-btn:hover { background: #000; }
+.save-publish-btn:disabled { background: #666; cursor: not-allowed; }
+
+.banner-link-hint {
+    font-size: 12px;
+    color: #0369a1;
+    background: #e0f2fe;
+    padding: 10px 16px;
+    border-radius: 6px;
+    white-space: nowrap;
+    border: 1px solid #bae6fd;
+}
+
+/* ---------- FULL SCREEN CANVAS ---------- */
 .wysiwyg-canvas {
-    max-width: 900px;
+    width: 100%;
+    max-width: 1600px; 
     margin: 0 auto;
     background: #ffffff;
     border: 1px solid var(--ws-line);
@@ -34,311 +105,267 @@
     padding-bottom: 120px; 
 }
 
-/* ---------- Invisible Inputs ---------- */
-.invisible-input {
-    border: 1px dashed transparent;
-    background: transparent;
-    font-family: inherit;
-    color: var(--ws-ink);
-    outline: none;
-    transition: 0.2s ease;
-}
-.invisible-input:hover, .invisible-input:focus {
-    border-color: #ccc;
-    background: #f9f9f9;
+/* ---------- BRAND HEADER CUSTOMIZATION ---------- */
+.brand-name-wrapper { display: flex; align-items: center; gap: 8px; }
+.brand-color-picker { width: 24px; height: 24px; padding: 0; border: none; cursor: pointer; background: transparent; }
+.brand-banner-upload-area {
+    width: 100%; height: 150px; background: #f5f5f5; border-radius: 8px; border: 1px dashed #ccc; 
+    display: flex; justify-content: center; align-items: center; position: relative; overflow: hidden;
 }
 
-/* ---------- Circular ADD Button (+) ---------- */
-.add-btn-circle {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border: 1.5px solid var(--ws-ink);
-    background: #fff;
-    color: var(--ws-ink);
+.header-type-toggle {
+    position: absolute; top: -15px; right: 20px; display: flex; background: #f0f0f0;
+    border-radius: 999px; padding: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.header-type-toggle button {
+    border: none; background: transparent; padding: 4px 16px; border-radius: 999px;
+    font-size: 11px; font-weight: bold; cursor: pointer; color: #666;
+}
+.header-type-toggle button.active { background: #f3d052; color: #000; }
+
+.official-store-badge {
+    font-size: 10px; font-weight: 800; color: #000;
+    background: linear-gradient(135deg, #F3d052 0%, #d4af37 50%, #f9e596 100%);
+    padding: 4px 12px; border-radius: 999px; letter-spacing: 0.1em;
+    text-transform: uppercase; box-shadow: 0 2px 5px rgba(0,0,0,0.15); margin-top: 8px;
+}
+
+/* ---------- ROUTING DROPDOWNS ---------- */
+.route-dropdown {
+    font-size: 10px; padding: 4px; width: 140px; border: 1px solid var(--ws-line);
+    border-radius: 4px; background: #fff; color: #000; cursor: pointer;
+}
+
+/* ---------- PAGES DASHBOARD (TAB 2) ---------- */
+.pages-dashboard-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
+.page-card { display: flex; flex-direction: column; align-items: center; gap: 12px; cursor: pointer; height: 100%; }
+.page-card-preview { width: 100%; aspect-ratio: 3/4; border: 1px solid #ccc; background: #f9f9f9; display: flex; align-items: center; justify-content: center; }
+.page-card-preview img { width: 100%; height: 100%; object-fit: cover; }
+.page-card-title { font-size: 14px; color: #333; }
+
+.page-card.create-new .page-card-preview { 
+    background: transparent; 
+    border: 2px solid #000; 
+}
+.page-card.create-new i { font-size: 40px; color: #666; border: 3px solid #666; border-radius: 50%; padding: 15px; }
+
+/* ---------- PAGE EDITOR (TAB 3 - TRADITIONAL 4-GRID) ---------- */
+.back-btn { background: transparent; border: none; color: var(--ws-muted); font-weight: bold; cursor: pointer; margin-bottom: 20px; font-size: 14px; }
+.page-editor-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.page-editor-title { font-size: 28px; font-weight: 900; text-transform: uppercase; color: #000; width: 100%; max-width: 400px; }
+.delete-page-btn { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 6px 12px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+
+.page-fake-sort-bar { display: flex; background: #f5f5f5; padding: 12px 20px; border-radius: 8px; margin-bottom: 30px; align-items: center; gap: 16px; font-size: 12px; color: #666; }
+.sort-pill { cursor: not-allowed; }
+.sort-pill.active { background: #fff; padding: 6px 12px; border-radius: 4px; font-weight: bold; color: #000; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
+.page-traditional-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+@media (min-width: 768px) { .page-traditional-grid { grid-template-columns: repeat(4, 1fr); gap: 25px; } }
+
+.traditional-product-card { border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden; background: #fff; position: relative; display: flex; flex-direction: column; height: 100%; }
+.traditional-product-card .item-delete-btn { position: absolute; top: 10px; left: 10px; z-index: 10; background: #fff; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; color: #dc2626; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+.trad-img-wrapper { position: relative; width: 100%; aspect-ratio: 3/4; background: #f9f9f9; }
+.trad-img-wrapper img { width: 100%; height: 100%; object-fit: cover; }
+.trad-heart { position: absolute; top: 10px; right: 10px; background: #fff; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; color: #999; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.trad-details { padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+.trad-brand { font-size: 11px; color: #888; text-transform: uppercase; }
+.trad-name { font-size: 13px; font-weight: 500; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trad-price-row { display: flex; align-items: baseline; gap: 6px; margin-top: 4px; }
+.trad-price { font-size: 14px; font-weight: bold; color: #000; }
+.trad-old-price { font-size: 12px; color: #999; text-decoration: line-through; }
+.trad-discount { font-size: 11px; color: #388e3c; }
+.trad-delivery { font-size: 11px; color: #888; margin-top: 4px; }
+
+.traditional-product-card.create-new { display: flex; align-items: center; justify-content: center; background: #fafafa; border: 2px dashed #ccc; color: #666; cursor: pointer; min-height: 350px; }
+.traditional-product-card.create-new i { font-size: 32px; border: 2px solid #ccc; border-radius: 50%; padding: 12px; margin-bottom: 12px; }
+
+/* ---------- GENERAL UTILITIES ---------- */
+.invisible-input { border: 1px dashed transparent; background: transparent; font-family: inherit; color: var(--ws-ink); outline: none; transition: 0.2s ease; }
+.invisible-input:hover, .invisible-input:focus { border-color: #ccc; background: #f9f9f9; }
+.add-btn-circle { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--ws-ink); background: #fff; color: var(--ws-ink); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; transition: 0.2s ease; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+.add-btn-circle:hover { background: var(--ws-ink); color: #fff; }
+.add-btn-circle.square { border-radius: 8px; }
+.add-btn-circle.inline { margin-left: 10px; }
+.brand-header-block { display: flex; flex-direction: column; align-items: center; gap: 16px; margin-bottom: 40px; border: 1px solid var(--ws-line); padding: 20px; border-radius: 8px; position: relative; }
+.brand-logo-circle { width: 80px; height: 80px; border-radius: 50%; border: 1px dashed var(--ws-muted); display: flex; align-items: center; justify-content: center; position: relative; font-size: 11px; color: var(--ws-muted); background: var(--ws-bg); }
+.brand-logo-circle img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.brand-logo-circle .add-btn-circle { position: absolute; bottom: -5px; right: -15px; width: 28px; height: 28px; font-size: 12px; }
+.brand-name-input { text-align: center; font-size: 18px; font-weight: bold; text-transform: uppercase; width: 100%; max-width: 250px; }
+.canvas-block { position: relative; margin-bottom: 30px; }
+.canvas-block:hover .module-controls { opacity: 1; }
+.module-controls { position: absolute; top: -15px; right: 10px; background: #fff; border: 1px solid var(--ws-line); border-radius: 20px; display: flex; overflow: hidden; opacity: 0; transition: 0.2s ease; z-index: 50; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+.module-controls button { border: none; background: transparent; padding: 6px 12px; cursor: pointer; color: var(--ws-ink); border-right: 1px solid var(--ws-line); }
+.module-controls button:hover { background: #f0f0f0; }
+.module-controls button.delete-mod { color: #dc2626; border-right: none; }
+.module-main-banner { border: 1px solid var(--ws-ink); border-radius: 4px; background: #fdfdfd; min-height: 140px; display: flex; flex-direction: column; }
+.banner-settings { padding: 8px 12px; border-bottom: 1px solid var(--ws-line); display: flex; justify-content: space-between; align-items: center; font-size: 11px; background: #f9f9f9; }
+.banner-preview-area { padding: 20px; display: flex; align-items: center; gap: 16px; flex: 1; overflow-x: auto; scrollbar-width: thin; padding-bottom: 24px; }
+.banner-slide-wrapper { display: flex; flex-direction: column; gap: 6px; position: relative; }
+.slide-delete-btn { position: absolute; top: 5px; right: 5px; z-index: 10; background: #fff; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; color: #dc2626; }
+.banner-thumb { width: 140px; height: 80px; border: 1px solid var(--ws-line); border-radius: 4px; overflow: hidden; flex-shrink: 0; }
+.banner-thumb.small { height: 90px; }
+.banner-thumb img, .banner-thumb video { width: 100%; height: 100%; object-fit: cover; }
+.module-category { margin-top: 40px; }
+.category-title-select { font-size: 16px; font-weight: bold; text-transform: uppercase; width: 100%; border-bottom: 2px solid var(--ws-ink); margin-bottom: 20px; cursor: pointer; }
+.category-items-flex { display: flex; align-items: center; gap: 30px; flex-wrap: wrap; }
+.category-item-card { display: flex; flex-direction: column; align-items: center; gap: 10px; position: relative; }
+.category-item-card .item-delete-btn { position: absolute; top: -5px; right: -5px; z-index: 10; background: #fff; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; color: #dc2626; display: flex; justify-content: center; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.cat-image-frame { width: 70px; height: 70px; background: var(--ws-bg); border: 1px solid var(--ws-line); overflow: hidden; }
+.cat-image-frame.circle { border-radius: 50%; }
+.cat-image-frame img { width: 100%; height: 100%; object-fit: cover; }
+.cat-item-text { width: 90px; text-align: center; cursor: pointer; font-size: 11px; font-weight: bold; padding: 2px; }
+.module-product-view { margin-top: 40px; padding: 16px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.4); backdrop-filter: blur(10px); }
+.product-view-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+.product-view-title { margin: 0; flex: 1; min-width: 150px; font-size: 14px; font-weight: bold; color: var(--ws-ink); text-transform: uppercase; }
+.product-view-tools { display: flex; gap: 16px; align-items: center; }
+.tool-pill { display: flex; align-items: center; gap: 8px; font-size: 10px; font-weight: bold; color: #888; background: #fff; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--ws-line); }
+.bubble-color-picker { width: 16px; height: 16px; padding: 0; border: none; cursor: pointer; }
+.product-grid { scrollbar-width: thin; padding-bottom: 24px; display: flex; gap: 12px; overflow-x: auto; align-items: flex-start; }
+.mock-product-card { background: #fff; border-radius: 8px; width: 140px; flex-shrink: 0; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); position: relative; }
+.mock-product-card .item-delete-btn { position: absolute; top: 5px; right: 5px; z-index: 10; background: #fff; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; color: #dc2626; }
+.mock-product-card img { width: 100%; height: 160px; object-fit: cover; }
+.mock-prod-details { padding: 10px; font-size: 11px; }
+.mock-prod-name { font-weight: 600; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mock-prod-price-pill { background: #8b7355; color: #fff; border-radius: 999px; padding: 4px 10px; font-size: 10px; font-weight: 800; display: inline-block; }
+.see-more-placeholder { width: 140px; height: 160px; flex-shrink: 0; border: 2px dashed #ccc; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.5); color: #888; font-size: 12px; font-weight: bold; }
+.grid-add-btn { flex-shrink: 0; align-self: center; margin-left: 10px; }
+.module-palette { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: #fff; border: 1px solid var(--ws-ink); border-radius: 8px; padding: 10px 16px; display: flex; gap: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 50; flex-wrap: wrap; justify-content: center; }
+.module-palette button { background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; padding: 8px 14px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; cursor: pointer; color: var(--ws-ink); }
+.product-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+.product-modal { background: #fff; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; max-height: 80vh; overflow-y: auto; }
+.my-products-list { display: flex; flex-direction: column; gap: 12px; margin-top: 20px; overflow-y: auto; max-height: 400px; }
+.my-product-item { display: flex; align-items: center; gap: 12px; padding: 10px; border: 1px solid var(--ws-line); border-radius: 8px; cursor: pointer; }
+.my-product-item img { width: 50px; height: 50px; object-fit: cover; border-radius: 4px; }
+.my-product-item div { flex: 1; font-size: 13px; }
+.btn-close { margin-top: 20px; width: 100%; padding: 10px; background: #eee; border: none; border-radius: 6px; cursor: pointer; }
+
+/* ============================================================
+   RESPONSIVE DESIGN (TABLET & MOBILE)
+   ============================================================ */
+
+@media (max-width: 1024px) {
+    .wysiwyg-header-controls, .wysiwyg-action-bar { padding: 0 20px; }
+    .wysiwyg-canvas { margin: 0 20px; width: auto; }
+}
+
+@media (max-width: 768px) {
+    .wysiwyg-container { padding: 15px; }
+    
+    .wysiwyg-action-bar {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .wysiwyg-action-bar.center-action {
+        justify-content: center;
+    }
+    
+    .banner-link-hint, .save-publish-btn {
+        flex: 1;
+        text-align: center;
+        font-size: 12px;
+        padding: 10px 5px;
+    }
+    
+    .wysiwyg-canvas { padding: 20px 15px 140px; margin: 0; }
+    
+    .header-type-toggle { position: relative; top: 0; right: 0; margin-bottom: 16px; }
+    .brand-name-input { width: 100%; }
+    
+    .module-controls { opacity: 1; top: -10px; right: 5px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+    
+    .module-palette { width: 90%; bottom: 20px; padding: 10px; gap: 8px; }
+    .module-palette button { flex: 1 1 calc(33% - 8px); padding: 8px 4px; font-size: 10px; }
+    
+    .product-modal { width: 95%; padding: 20px; }
+    
+    .page-editor-header { flex-direction: column; gap: 10px; }
+    .page-editor-title { text-align: center; }
+    .delete-page-btn.full-width-mobile { width: 100%; text-align: center; }
+    
+    .page-fake-sort-bar { flex-wrap: wrap; justify-content: center; }
+    
+    .product-view-tools { flex-direction: column; align-items: stretch; width: 100%; }
+
+    /* Enforce Strict 2 Column Grids on Mobile */
+    .pages-dashboard-grid { grid-template-columns: repeat(2, 1fr); }
+    .page-traditional-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ... keep all existing CSS ... */
+
+/* ---------- TOOLTIPS FOR SIZING INFO ---------- */
+.info-tooltip {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
-    font-size: 16px;
-    transition: 0.2s ease;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-.add-btn-circle:hover {
-    background: var(--ws-ink);
-    color: #fff;
-}
-.add-btn-circle.square { border-radius: 8px; }
-.add-btn-circle.inline { margin-left: 10px; }
-.add-btn-circle.absolute-center {
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-}
-
-/* ---------- 1. BRAND HEADER ---------- */
-.brand-header-block {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
-    margin-bottom: 40px;
-    border: 1px solid var(--ws-line);
-    padding: 20px;
-    border-radius: 8px;
-}
-
-.brand-logo-circle {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    border: 1px dashed var(--ws-muted);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    font-size: 11px;
-    color: var(--ws-muted);
-    background: var(--ws-bg);
-}
-.brand-logo-circle img {
-    width: 100%; height: 100%;
-    object-fit: cover;
-    border-radius: 50%;
-}
-.brand-logo-circle .add-btn-circle {
-    position: absolute;
-    bottom: -5px; right: -15px;
-    width: 28px; height: 28px; font-size: 12px;
-}
-
-.brand-name-input {
-    text-align: center;
-    font-size: 18px;
-    font-weight: bold;
-    text-transform: uppercase;
-    width: 250px;
-}
-
-/* ---------- CANVAS BLOCKS & CONTROLS ---------- */
-.canvas-block {
-    position: relative;
-    margin-bottom: 30px;
-}
-.canvas-block:hover .module-controls { opacity: 1; }
-
-.module-controls {
-    position: absolute;
-    top: -15px; right: 10px;
-    background: #fff;
-    border: 1px solid var(--ws-line);
-    border-radius: 20px;
-    display: flex;
-    overflow: hidden;
-    opacity: 0;
-    transition: 0.2s ease;
-    z-index: 50;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-}
-.module-controls button {
-    border: none;
-    background: transparent;
-    padding: 6px 12px;
-    cursor: pointer;
-    color: var(--ws-ink);
-    border-right: 1px solid var(--ws-line);
-}
-.module-controls button:hover { background: #f0f0f0; }
-.module-controls button.delete-mod { color: #dc2626; border-right: none; }
-.module-controls button.delete-mod:hover { background: #fee2e2; }
-
-/* ---------- 2. BANNERS (MAIN & SMALL) ---------- */
-.module-main-banner {
-    border: 1px solid var(--ws-ink);
-    border-radius: 4px;
-    background: #fdfdfd;
-    min-height: 140px;
-    display: flex;
-    flex-direction: column;
-}
-.banner-settings {
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--ws-line);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 11px;
-    background: #f9f9f9;
-}
-.banner-preview-area {
-    padding: 20px;
-    display: flex;
-    align-items: center; /* Ensures content aligns to top so it doesn't get clipped by scrollbar */
-    gap: 16px;
-    flex: 1;
-    overflow-x: auto;
-}
-.banner-thumb {
-    width: 140px; height: 80px;
-    border: 1px solid var(--ws-line);
-    border-radius: 4px;
-    overflow: hidden;
-    flex-shrink: 0;
-}
-.banner-thumb img, .banner-thumb video { width: 100%; height: 100%; object-fit: cover; }
-.helper-text { font-size: 12px; color: var(--ws-muted); font-style: italic; }
-
-/* ---------- 3. CATEGORIES ROW ---------- */
-.module-category {
-    margin-top: 40px;
-}
-.category-items-flex {
-    display: flex;
-    align-items: center;
-    gap: 30px;
-    flex-wrap: wrap;
-}
-.category-item-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-}
-.cat-image-frame {
-    width: 70px; height: 70px;
-    background: var(--ws-bg);
-    border: 1px solid var(--ws-line);
-    overflow: hidden;
-}
-.cat-image-frame.circle { border-radius: 50%; }
-.cat-image-frame.square { border-radius: 4px; }
-.cat-image-frame img { width: 100%; height: 100%; object-fit: cover; }
-.cat-item-text {
-    width: 80px;
-    text-align: center;
-    font-size: 12px;
-    text-transform: uppercase;
-}
-.category-add-tools {
-    display: flex;
-    gap: 10px;
-    margin-left: 20px;
-    border-left: 1px dashed var(--ws-line);
-    padding-left: 20px;
-}
-
-/* ---------- 4. PRODUCT VIEW ---------- */
-.module-product-view {
-    margin-top: 40px;
-    transition: background 0.3s ease;
-}
-.product-view-title {
+    margin-left: 6px;
+    color: #a3a3a3;
+    cursor: help;
     font-size: 14px;
-    font-weight: bold;
-    color: var(--ws-ink);
-    text-transform: uppercase;
 }
-
-.mock-product-card {
-    background: #fff;
-    border-radius: 8px;
-    width: 140px;
-    overflow: hidden;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    position: relative;
+.info-tooltip:hover {
+    color: #4a3f35;
 }
-.mock-product-card img {
-    width: 100%; height: 160px; object-fit: cover;
-}
-.mock-prod-details {
-    padding: 10px;
-    font-size: 11px;
-}
-.mock-prod-name { font-weight: 600; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-.mock-prod-price-pill {
-    background: #8b7355; 
+.info-tooltip .tooltip-text {
+    visibility: hidden;
+    width: 220px;
+    background-color: #2b2620;
     color: #fff;
-    border-radius: 999px;
-    padding: 4px 10px;
-    font-size: 10px;
-    font-weight: 800;
-    display: inline-block;
-}
-
-/* ---------- CUSTOM VISIBLE SCROLLBARS ---------- */
-.banner-preview-area, .product-grid, .category-scroll-area {
-    scrollbar-width: thin; /* Firefox */
-}
-.banner-preview-area::-webkit-scrollbar, 
-.product-grid::-webkit-scrollbar,
-.category-scroll-area::-webkit-scrollbar {
-    height: 8px; /* Restores the scrollbar thickness for Chrome/Safari */
-}
-.banner-preview-area::-webkit-scrollbar-thumb, 
-.product-grid::-webkit-scrollbar-thumb,
-.category-scroll-area::-webkit-scrollbar-thumb {
-    background: #d4cfc7;
-    border-radius: 10px;
-}
-
-/* ---------- BOTTOM PALETTE MENU ---------- */
-.module-palette {
+    text-align: center;
+    border-radius: 6px;
+    padding: 8px;
     position: absolute;
-    bottom: 30px; left: 50%;
+    z-index: 100;
+    bottom: 150%;
+    left: 50%;
     transform: translateX(-50%);
-    background: #fff;
-    border: 1px solid var(--ws-ink);
-    border-radius: 8px;
-    padding: 10px 16px;
-    display: flex;
-    gap: 12px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-    z-index: 50;
-    flex-wrap: wrap;
-    justify-content: center;
-}
-.module-palette button {
-    background: #f5f5f5;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 8px 14px;
     font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    cursor: pointer;
-    transition: 0.2s ease;
-    color: var(--ws-ink);
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: normal;
+    opacity: 0;
+    transition: opacity 0.3s, visibility 0.3s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
-.module-palette button:hover {
-    background: var(--ws-ink);
-    color: #fff;
-    border-color: var(--ws-ink);
+/* Little arrow at bottom of tooltip */
+.info-tooltip .tooltip-text::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #2b2620 transparent transparent transparent;
+}
+.info-tooltip:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
 }
 
-/* ---------- MODALS ---------- */
-.product-modal-overlay {
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.5); z-index: 1000;
-    display: flex; align-items: center; justify-content: center;
+/* ... keep all existing CSS ... */
+
+/* 🔥 NEW MORE BUTTON STYLE FOR EDITOR PREVIEW */
+.more-btn {
+  background: var(--ws-surface);
+  border: 1px solid var(--ws-line);
+  color: var(--ws-cocoa);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
 }
-.product-modal {
-    background: #fff; padding: 30px; border-radius: 12px;
-    width: 400px; max-height: 80vh; overflow-y: auto;
-}
-.my-products-list {
-    display: flex; flex-direction: column; gap: 12px; margin-top: 20px;
-}
-.my-product-item {
-    display: flex; align-items: center; gap: 12px;
-    padding: 10px; border: 1px solid var(--ws-line); border-radius: 8px;
-    cursor: pointer; transition: 0.2s;
-}
-.my-product-item:hover { border-color: var(--ws-ink); background: #fafafa; }
-.my-product-item img { width: 50px; height: 50px; object-fit: cover; border-radius: 4px; }
-.my-product-item div { flex: 1; font-size: 13px; }
-.my-product-item i { color: var(--ws-ink); }
-.btn-close {
-    margin-top: 20px; width: 100%; padding: 10px;
-    background: #eee; border: none; border-radius: 6px; cursor: pointer;
+.more-btn:hover {
+  background: var(--ws-ink);
+  color: var(--ws-surface);
+  border-color: var(--ws-ink);
 }

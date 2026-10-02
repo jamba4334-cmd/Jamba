@@ -26,6 +26,7 @@ import SellerLanding from './admin/SellerLanding';
 import SellerPortal from './admin/Seller';
 import BrandStorefront from './pages/BrandStorefront'; 
 
+
 // Pointing to your nested AdminLayout file
 const SuperAdmin = lazy(() => import('./super_admin/Admin/AdminLayout')); 
 
@@ -72,6 +73,12 @@ function App() {
           <Route path="order-success" element={<OrderSuccess />} />
           <Route path="search" element={<SearchResults />} />
           <Route path="sell-with-us" element={<SellerLanding />} />
+
+          {/* Your existing route */}
+<Route path="/shop/:vanityHandle" element={<BrandStorefront />} />
+
+{/* ADD THIS NEW ROUTE RIGHT BELOW IT */}
+<Route path="/shop/:vanityHandle/pages/:pageId" element={<BrandStorefront />} />
           
           {/* 🔥 UPDATED: Dynamic routing for Custom Brand Storefronts using vanity handles */}
           <Route path="shop/:vanityHandle" element={<BrandStorefront />} />

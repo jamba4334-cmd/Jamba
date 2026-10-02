@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import BannerLink from '../components/BannerLink';
 import './Home.css';
@@ -113,6 +113,7 @@ export default function Home() {
   const navigate = useNavigate();
    
   const [homeBlocks, setHomeBlocks] = useState([]);
+  const [brandProfiles, setBrandProfiles] = useState({}); // 🔥 NEW: Store live brand logos
   const [loading, setLoading] = useState(true);
 
   // --- Network State ---
@@ -152,6 +153,18 @@ export default function Home() {
              setHomeBlocks(data.blocks);
           }
         }
+
+        // 🔥 NEW: Fetch seller profiles to override static homepage images with live Storefront logos
+        const profilesSnap = await getDocs(collection(db, "seller_profiles"));
+        const profilesMap = {};
+        profilesSnap.forEach(profileDoc => {
+            const pData = profileDoc.data();
+            if (pData.storefront && pData.storefront.vanityHandle) {
+                profilesMap[pData.storefront.vanityHandle.toLowerCase()] = pData.storefront;
+            }
+        });
+        setBrandProfiles(profilesMap);
+
       } catch (error) {
         console.error("Error fetching homepage layout:", error);
         setFetchError(true); // Flag if internet drops mid-fetch
@@ -240,16 +253,27 @@ export default function Home() {
 
                       <div className="circle-scroll">
                           {block.items.map((item, idx) => {
-                              // 🔥 NEW LOGIC: Check if this is a direct brand shop link 
-                              // (starts with /shop/) or a generic category link
+                              const isBrandShop = item.link && item.link.startsWith('/shop/');
+                              
+                              let displayImage = item.image;
+                              let displayName = item.name;
+
+                              // 🔥 NEW LOGIC: Override with live Brand Logo from Storefront Editor settings
+                              if (isBrandShop) {
+                                  const handle = item.link.replace('/shop/', '').toLowerCase();
+                                  const brandData = brandProfiles[handle];
+                                  if (brandData) {
+                                      displayImage = brandData.brandLogo || item.image;
+                                      displayName = brandData.brandName || item.name;
+                                  }
+                              }
+
                               const handleClick = () => {
                                   if (!item.link) {
                                       navigate('/category/all');
-                                  } else if (item.link.startsWith('/shop/')) {
-                                      // It is a Vanity Storefront! Go straight there.
+                                  } else if (isBrandShop) {
                                       navigate(item.link);
                                   } else {
-                                      // It is a standard category or product link
                                       navigate(`/${item.link.replace(/^\/+/, '')}`);
                                   }
                               };
@@ -257,9 +281,9 @@ export default function Home() {
                               return (
                                   <div key={idx} className="circle-item" onClick={handleClick}>
                                       <div className="circle-img-wrapper">
-                                          <img src={item.image} alt={item.name} />
+                                          <img src={displayImage} alt={displayName} />
                                       </div>
-                                      <p className="circle-name">{item.name}</p>
+                                      <p className="circle-name">{displayName}</p>
                                   </div>
                               );
                           })}
