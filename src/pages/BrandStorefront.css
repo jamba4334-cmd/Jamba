@@ -228,6 +228,7 @@
   .min-product-card { width: 180px; border-radius: 14px; }
   .min-image-wrapper { height: 220px; }
   .min-product-info { padding: 14px 16px; }
+
   
   /* Custom visible scrollbar style to assist desktop tracking */
   .category-scroll-area, .bubble-scroll { scrollbar-width: thin; }
@@ -241,4 +242,6 @@
   .min-product-card { width: 140px; }
   .min-image-wrapper { height: 180px; }
   .public-main-banner { height: 180px; }
+  .public-storefront-wrapper { margin-top: 12%;}
+  .storefront-brand-header { margin-bottom: 1px;}
 }
