@@ -1,45 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import './SellerStorefrontEditor.css';
 
-export default function SellerStorefrontEditor() {
+export default function SellerStorefrontEditor({ adminSellerEmail, onBackToAdmin }) {
     const auth = getAuth();
     const user = auth.currentUser;
+    const targetEmail = adminSellerEmail || user?.email;
 
     const [isSaving, setIsSaving] = useState(false);
     const [uploadingTarget, setUploadingTarget] = useState(null);
 
-    // Global Store Brand Info
     const [brandName, setBrandName] = useState('');
     const [brandLogo, setBrandLogo] = useState('');
     const [brandColor, setBrandColor] = useState('#000000');
-    
-    // Header Display Options
     const [headerType, setHeaderType] = useState('text'); 
     const [headerBanner, setHeaderBanner] = useState('');
-    
-    // Core Data State
     const [modules, setModules] = useState([]); 
     const [customPages, setCustomPages] = useState([]); 
     const [storeCategories, setStoreCategories] = useState([]);
     
-    // UI Navigation State
     const [activeTab, setActiveTab] = useState('store'); 
     const [editingPageId, setEditingPageId] = useState(null);
 
-    // Product Selection State
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
     const [activeTargetModule, setActiveTargetModule] = useState(null);
     const [myProducts, setMyProducts] = useState([]); 
     const [isLoadingProducts, setIsLoadingProducts] = useState(false);
 
     useEffect(() => {
-        if (!user?.email) return;
+        if (!targetEmail) return;
         
         const loadData = async () => {
-            const snap = await getDoc(doc(db, "seller_profiles", user.email));
+            const snap = await getDoc(doc(db, "seller_profiles", targetEmail));
             if (snap.exists() && snap.data().storefront) {
                 const sf = snap.data().storefront;
                 setBrandName(sf.brandName || '');
@@ -62,6 +56,9 @@ export default function SellerStorefrontEditor() {
             try {
                 const productSnap = await getDocs(collection(db, "products"));
                 const loadedProducts = [];
+                
+                const currentBrandName = snap.exists() ? (snap.data().profile?.brandName || snap.data().storefront?.brandName) : null;
+
                 productSnap.forEach(d => {
                     const p = d.data();
                     let imgUrl = "https://via.placeholder.com/150";
@@ -69,31 +66,71 @@ export default function SellerStorefrontEditor() {
                     else if (typeof p.image === 'string') imgUrl = p.image;
                     else if (typeof p.imageUrl === 'string') imgUrl = p.imageUrl;
 
-                    loadedProducts.push({
-                        id: d.id, name: p.title || p.name || 'Untitled Product', price: p.selling_price || p.price || 0, image: imgUrl
-                    });
+                    const pEmail = p.sellerEmail || p.seller_email || p.email;
+                    const pBrand = p.brandName || p.brand_name || p.brand;
+                    
+                    const isMyProduct = !adminSellerEmail || 
+                                        pEmail === targetEmail || 
+                                        (currentBrandName && pBrand === currentBrandName);
+
+                    if (isMyProduct) {
+                        loadedProducts.push({
+                            id: d.id, name: p.title || p.name || 'Untitled Product', price: p.selling_price || p.price || 0, image: imgUrl
+                        });
+                    }
                 });
                 setMyProducts(loadedProducts);
             } catch (err) {} 
             finally { setIsLoadingProducts(false); }
         };
         loadData();
-    }, [user]);
+    }, [targetEmail]);
 
     const genId = () => Math.random().toString(36).substr(2, 9);
 
+    // 🔥 BULLETPROOF AUTH CHECK: Forces Firebase to resolve the current session securely
     const saveStorefront = async () => {
-        if (!user) return;
+        if (!targetEmail) return;
         setIsSaving(true);
         try {
-            await setDoc(doc(db, "seller_profiles", user.email), {
+            const token = await new Promise((resolve, reject) => {
+                const unsubscribe = onAuthStateChanged(getAuth(), async (activeUser) => {
+                    unsubscribe();
+                    if (activeUser) {
+                        resolve(await activeUser.getIdToken());
+                    } else {
+                        reject(new Error("Auth session desynchronized. Please log out and log back in."));
+                    }
+                });
+            });
+            
+            const payload = {
                 storefront: { 
                     brandName, brandLogo, brandColor, headerType, headerBanner, 
                     modules, pages: customPages, updatedAt: new Date().toISOString() 
                 }
-            }, { merge: true });
-            alert("Storefront and Pages published successfully!");
-        } catch (e) { alert("Error saving: " + e.message); }
+            };
+
+            const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+            const response = await fetch(`${apiUrl}/admin/seller_profiles/${targetEmail}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || "Server rejected the save.");
+            }
+
+            alert(adminSellerEmail ? `Storefront updated for ${adminSellerEmail}!` : "Storefront and Pages published successfully!");
+        } catch (e) { 
+            console.error(e);
+            alert("Error saving: " + e.message); 
+        }
         setIsSaving(false);
     };
 
@@ -212,6 +249,21 @@ export default function SellerStorefrontEditor() {
     return (
         <div className="content-section active wysiwyg-container">
             
+            {adminSellerEmail && (
+                <div style={{ background: '#fef3c7', padding: '12px 20px', borderRadius: '8px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #f59e0b', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <i className="fa-solid fa-user-shield" style={{ color: '#b45309', fontSize: '20px' }}></i>
+                        <div>
+                            <div style={{ fontWeight: '800', color: '#b45309', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '1px' }}>Admin Override Mode</div>
+                            <div style={{ color: '#78350f', fontSize: '14px', fontWeight: '500' }}>Editing Storefront: <strong>{adminSellerEmail}</strong></div>
+                        </div>
+                    </div>
+                    <button onClick={onBackToAdmin} style={{ background: '#b45309', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <i className="fa-solid fa-arrow-left"></i> Exit Editor
+                    </button>
+                </div>
+            )}
+
             <div className="wysiwyg-header-controls">
                 <div className="store-pages-toggle">
                     <button className={activeTab === 'store' ? 'active' : ''} onClick={() => setActiveTab('store')}>Store</button>
@@ -243,7 +295,6 @@ export default function SellerStorefrontEditor() {
             )}
 
             <div className="wysiwyg-canvas">
-
                 {activeTab === 'store' && (
                     <>
                         <div className="canvas-block brand-header-block">
@@ -372,8 +423,6 @@ export default function SellerStorefrontEditor() {
                                 {(mod.type === 'product_single' || mod.type === 'product_double') && (
                                     <div className="module-product-view" style={{ backgroundColor: mod.bubbleColor || '#f5f5f5' }}>
                                         <div className="product-view-header">
-                                            
-                                            {/* 🔥 NEW: Displays the Circular Arrow Next to Title in the Editor */}
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                                 <input type="text" className="invisible-input product-view-title" value={mod.heading} onChange={(e) => updateModule(mod.id, 'heading', e.target.value)} style={{ margin: 0 }} />
                                                 {mod.moreLink && (
@@ -449,9 +498,6 @@ export default function SellerStorefrontEditor() {
                     </>
                 )}
 
-                {/* =========================================
-                    TAB 2: PAGES DASHBOARD (GRID)
-                ========================================= */}
                 {activeTab === 'pages' && (
                     <div className="pages-dashboard-grid">
                         {customPages.map(page => (
@@ -475,9 +521,6 @@ export default function SellerStorefrontEditor() {
                     </div>
                 )}
 
-                {/* =========================================
-                    TAB 3: EDIT SPECIFIC PAGE (TRADITIONAL GRID)
-                ========================================= */}
                 {activeTab === 'edit-page' && editingPageId && (() => {
                     const page = customPages.find(p => p.id === editingPageId);
                     if (!page) return null;
@@ -540,7 +583,6 @@ export default function SellerStorefrontEditor() {
 
             </div>
 
-            {/* PRODUCT SELECTOR MODAL */}
             {isProductModalOpen && (
                 <div className="product-modal-overlay" onClick={() => setIsProductModalOpen(false)}>
                     <div className="product-modal" onClick={e => e.stopPropagation()}>

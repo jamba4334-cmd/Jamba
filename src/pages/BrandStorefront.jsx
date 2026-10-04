@@ -4,7 +4,6 @@ import { db } from '../firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import './BrandStorefront.css';
 
-// Global mouse-drag logic for desktop sliding (Touch devices use native CSS scroll)
 let isDragging = false;
 const dragEvents = {
     onMouseDown: (e) => {
@@ -14,7 +13,7 @@ const dragEvents = {
         slider.dataset.startX = e.pageX - slider.offsetLeft;
         slider.dataset.scrollLeft = slider.scrollLeft;
         slider.style.cursor = 'grabbing';
-        slider.style.scrollBehavior = 'auto'; // Remove smooth scroll during manual drag
+        slider.style.scrollBehavior = 'auto'; 
         if (slider.classList.contains('snap-track')) slider.style.scrollSnapType = 'none';
     },
     onMouseLeave: (e) => {
@@ -41,11 +40,10 @@ const dragEvents = {
         const startX = parseFloat(slider.dataset.startX);
         const scrollLeft = parseFloat(slider.dataset.scrollLeft);
         const x = e.pageX - slider.offsetLeft;
-        const walk = (x - startX) * 1.5; // Scroll speed multiplier
+        const walk = (x - startX) * 1.5; 
         slider.scrollLeft = scrollLeft - walk;
     },
     onClickCapture: (e) => {
-        // Prevent link clicks if the user was just dragging
         if (isDragging) {
             e.stopPropagation();
             e.preventDefault();
@@ -78,7 +76,6 @@ export default function BrandStorefront() {
     const activeModules = !pageId && storefront ? (storefront.modules || []) : [];
     const customPage = pageId && storefront ? storefront.pages?.find(p => p.id === pageId) : null;
 
-    // 🔥 NEW: Scrollable Banner Autoplay Logic
     useEffect(() => {
         if (!activeModules || activeModules.length === 0) return;
         const intervals = [];
@@ -88,13 +85,12 @@ export default function BrandStorefront() {
                 
                 const id = setInterval(() => {
                     const slider = document.getElementById(`banner-track-${mod.id}`);
-                    // Only autoscroll if the user isn't currently dragging it
                     if (slider && slider.dataset.isDown !== 'true') {
                         const maxScroll = slider.scrollWidth - slider.clientWidth;
                         if (slider.scrollLeft >= maxScroll - 5) { 
-                            slider.scrollTo({ left: 0, behavior: 'smooth' }); // Reset to start
+                            slider.scrollTo({ left: 0, behavior: 'smooth' }); 
                         } else {
-                            slider.scrollBy({ left: slider.clientWidth, behavior: 'smooth' }); // Next slide
+                            slider.scrollBy({ left: slider.clientWidth, behavior: 'smooth' }); 
                         }
                     }
                 }, scrollTimeMs);
@@ -106,6 +102,18 @@ export default function BrandStorefront() {
 
     if (isLoading) return <div className="storefront-loading"><i className="fa-solid fa-spinner fa-spin"></i> Loading...</div>;
     if (error || !storefront) return <div className="storefront-error"><h2>{error || "Store Not Found"}</h2><Link to="/" className="storefront-back-btn">Return to Marketplace</Link></div>;
+
+    // 🔥 SUSPENDED STORE LOGIC: Hide the entire store if admin suspended it
+    if (storefront.isSuspended) {
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', backgroundColor: 'var(--ws-bg, #faf8f5)', fontFamily: 'Inter, sans-serif' }}>
+                <i className="fa-solid fa-store-slash" style={{ fontSize: '48px', color: 'var(--ws-danger, #a8544a)', marginBottom: '20px' }}></i>
+                <h2 style={{ fontSize: '24px', fontWeight: '900', color: 'var(--ws-ink, #2d2a26)', textTransform: 'uppercase', marginBottom: '8px' }}>Store Unavailable</h2>
+                <p style={{ color: 'var(--ws-body, #5a5651)', marginBottom: '32px', textAlign: 'center', maxWidth: '400px' }}>This brand's storefront is currently suspended or under review.</p>
+                <Link to="/" style={{ background: 'var(--ws-ink, #2d2a26)', color: '#fff', padding: '12px 32px', borderRadius: '999px', textDecoration: 'none', fontWeight: 'bold', fontSize: '14px' }}>Return to Marketplace</Link>
+            </div>
+        );
+    }
 
     const resolveLink = (link) => {
         if (!link) return "#";
@@ -123,7 +131,6 @@ export default function BrandStorefront() {
         return (
             <Link to={`/product/${prod.id}`} className="min-product-card">
                 <div className="min-image-wrapper">
-                    {/* draggable=false stops the browser from trying to drag the image file instead of scrolling */}
                     <img src={prod.image} alt={prod.name} draggable="false" onDragStart={e => e.preventDefault()} />
                 </div>
                 <div className="min-product-info">
@@ -158,7 +165,6 @@ export default function BrandStorefront() {
                 </div>
             )}
 
-            {/* --- CUSTOM PAGE VIEW (Traditional Grid) --- */}
             {pageId && customPage && (
                 <div className="custom-page-container">
                     <div className="custom-page-breadcrumbs">
@@ -211,13 +217,11 @@ export default function BrandStorefront() {
                 <div style={{ textAlign: 'center', padding: '60px', color: 'var(--ws-muted)' }}>This custom page does not exist.</div>
             )}
 
-            {/* --- MAIN STOREFRONT MODULES VIEW --- */}
             {!pageId && (
                 <div className="storefront-modules-container">
                     {activeModules.map((mod) => (
                         <div key={mod.id} className="storefront-module">
                             
-                            {/* MAIN BANNER (Now Drag/Swipe Scrollable) */}
                             {mod.type === 'main_banner' && mod.slides?.length > 0 && (
                                 <div className="public-main-banner snap-track draggable-track" id={`banner-track-${mod.id}`} {...dragEvents}>
                                     {mod.slides.map((slide, idx) => {
@@ -236,7 +240,6 @@ export default function BrandStorefront() {
                                 </div>
                             )}
 
-                            {/* CATEGORY ROW (Draggable) */}
                             {mod.type === 'category_row' && mod.items?.length > 0 && (
                                 <div className="public-category-row">
                                     {isFirstCategory && <h2 className="section-main-title">CATEGORIES</h2>}
@@ -258,9 +261,7 @@ export default function BrandStorefront() {
                                 </div>
                             )}
 
-                            {/* PRODUCT VIEW & DOUBLE PRODUCT VIEW (Draggable) */}
                             {(mod.type === 'product_single' || mod.type === 'product_double') && mod.products?.length > 0 && (() => {
-                                // 🔥 FALLBACK ROUTE: Always render button. If empty, routes to All Category for this brand.
                                 const destination = mod.moreLink ? resolveLink(mod.moreLink) : `/category/all?brand=${vanityHandle}`;
 
                                 return (
@@ -294,7 +295,6 @@ export default function BrandStorefront() {
                                 </div>
                             )})()}
 
-                            {/* SMALL BANNER (Now Drag/Swipe Scrollable) */}
                             {mod.type === 'small_banner' && mod.slides?.length > 0 && (
                                 <div className="public-small-banner-wrapper">
                                     <div className="public-small-banner snap-track draggable-track" id={`banner-track-${mod.id}`} {...dragEvents}>

@@ -6,6 +6,9 @@ import "../styles/Sellers.css";
 import { db } from '../../firebase'; 
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 
+// ⚠️ ADJUST THIS RELATIVE PATH TO POINT TO YOUR EDITOR COMPONENT
+import SellerStorefrontEditor from '../../admin/SellerStorefrontEditor'; 
+
 export default function SellersTab({ getAuthHeaders, globalSellers = [], liveProducts = [], orders = [], loadAuthorizedSellers }) {
     // --- State Management ---
     const [mainViewTab, setMainViewTab] = useState("directory"); 
@@ -21,6 +24,11 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
     // Onboarding States
     const [pendingApplications, setPendingApplications] = useState([]);
     const [isLoadingApplications, setIsLoadingApplications] = useState(false);
+
+    // Storefront Monitor States
+    const [storefronts, setStorefronts] = useState([]);
+    const [isLoadingStorefronts, setIsLoadingStorefronts] = useState(false);
+    const [editingSellerEmail, setEditingSellerEmail] = useState(null);
 
     // --- Fetch Pending Applications ---
     useEffect(() => {
@@ -50,6 +58,50 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
             console.error("Error fetching pending applications:", error);
         } finally {
             setIsLoadingApplications(false);
+        }
+    };
+
+    // --- Fetch Live Storefronts ---
+    useEffect(() => {
+        if (mainViewTab === "storefronts" && !editingSellerEmail) {
+            fetchStorefronts();
+        }
+    }, [mainViewTab, editingSellerEmail]);
+
+    const fetchStorefronts = async () => {
+        setIsLoadingStorefronts(true);
+        try {
+            const profilesSnap = await getDocs(collection(db, "seller_profiles"));
+            const stores = [];
+            profilesSnap.forEach(profileDoc => {
+                const data = profileDoc.data();
+                if (data.storefront) {
+                    stores.push({
+                        sellerEmail: profileDoc.id,
+                        ...data.storefront
+                    });
+                }
+            });
+            setStorefronts(stores);
+        } catch (error) {
+            console.error("Error fetching storefronts:", error);
+        } finally {
+            setIsLoadingStorefronts(false);
+        }
+    };
+
+    const toggleStoreSuspension = async (sellerEmail, currentStatus) => {
+        if (!window.confirm(`Are you sure you want to ${currentStatus ? 'enable' : 'suspend'} this storefront?`)) return;
+        try {
+            const profileRef = doc(db, "seller_profiles", sellerEmail);
+            await updateDoc(profileRef, {
+                "storefront.isSuspended": !currentStatus
+            });
+            setStorefronts(prev => prev.map(store => 
+                store.sellerEmail === sellerEmail ? { ...store, isSuspended: !currentStatus } : store
+            ));
+        } catch (error) {
+            alert("Failed to update store status.");
         }
     };
 
@@ -224,7 +276,7 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
         <div className="content-section active sellers-container">
             <span className="section-title" style={{ marginBottom: '16px', display: 'block' }}>Seller Directory</span>
             
-            {/* 🔥 CLEANED UP SUB-NAVIGATION TABS 🔥 */}
+            {/* 🔥 THREE TABS NAV 🔥 */}
             <div className="seller-sub-nav">
                 <button 
                     type="button"
@@ -244,6 +296,13 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                             {pendingApplications.length}
                         </span>
                     )}
+                </button>
+                <button 
+                    type="button"
+                    onClick={() => setMainViewTab("storefronts")}
+                    className={`seller-sub-nav-btn ${mainViewTab === "storefronts" ? "active" : ""}`}
+                >
+                    <i className="fa-solid fa-store"></i> Live Storefronts
                 </button>
             </div>
 
@@ -381,6 +440,104 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                                 </tbody>
                             </table>
                         </div>
+                    )}
+                </div>
+            )}
+
+            {/* 🔥 NEW TAB 3: LIVE STOREFRONTS MONITORING 🔥 */}
+            {mainViewTab === "storefronts" && (
+                <div className="card" style={{ padding: editingSellerEmail ? '0' : '28px', background: editingSellerEmail ? 'transparent' : 'var(--ws-cream)', border: editingSellerEmail ? 'none' : '1px solid var(--ws-line)', boxShadow: editingSellerEmail ? 'none' : 'var(--ws-shadow)' }}>
+                    
+                    {editingSellerEmail ? (
+                        <SellerStorefrontEditor 
+                            adminSellerEmail={editingSellerEmail} 
+                            onBackToAdmin={() => setEditingSellerEmail(null)} 
+                        />
+                    ) : (
+                        <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                <div>
+                                    <span className="section-subtitle" style={{ margin: 0, padding: 0 }}>Live Storefronts</span>
+                                    <p className="text-helper" style={{ margin: '4px 0 0 0' }}>Monitor and manage custom vanity stores created by sellers.</p>
+                                </div>
+                                <button type="button" onClick={fetchStorefronts} className="btn-submit" style={{ padding: '8px 16px', width: 'auto', margin: 0, backgroundColor: '#f3f4f6', color: '#111', border: '1px solid #d1d5db' }}>
+                                    <i className="fa-solid fa-rotate-right"></i> Refresh
+                                </button>
+                            </div>
+
+                            {isLoadingStorefronts ? (
+                                <p style={{ color: 'var(--ws-body)', padding: '20px 0', textAlign: 'center' }}><i className="fa-solid fa-spinner fa-spin"></i> Loading stores...</p>
+                            ) : (
+                                <div className="onboarding-table-wrapper">
+                                    <table className="onboarding-table" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+                                        <thead>
+                                            <tr>
+                                                <th style={{ padding: '13px 18px', background: 'var(--ws-muted)', borderBottom: '1px solid var(--ws-line)', fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--ws-brown)' }}>Brand</th>
+                                                <th style={{ padding: '13px 18px', background: 'var(--ws-muted)', borderBottom: '1px solid var(--ws-line)', fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--ws-brown)' }}>URL Handle</th>
+                                                <th style={{ padding: '13px 18px', background: 'var(--ws-muted)', borderBottom: '1px solid var(--ws-line)', fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--ws-brown)' }}>Status</th>
+                                                <th style={{ padding: '13px 18px', background: 'var(--ws-muted)', borderBottom: '1px solid var(--ws-line)', fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--ws-brown)', textAlign: 'right' }}>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {storefronts.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan="4" style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>No custom storefronts published yet.</td>
+                                                </tr>
+                                            ) : (
+                                                storefronts.map((store, idx) => (
+                                                    <tr key={idx} style={{ background: store.isSuspended ? 'var(--ws-danger-soft)' : 'transparent' }}>
+                                                        <td style={{ padding: '16px 18px', borderBottom: '1px solid var(--ws-line)' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--ws-sand)', overflow: 'hidden', border: '1px solid var(--ws-line)', flexShrink: 0 }}>
+                                                                    {store.brandLogo ? <img src={store.brandLogo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
+                                                                </div>
+                                                                <div>
+                                                                    <strong style={{ color: 'var(--ws-ink)', fontSize: '14px' }}>{store.brandName || 'Unnamed Brand'}</strong>
+                                                                    <div style={{ fontSize: '12px', color: 'var(--ws-body)', marginTop: '2px' }}>{store.sellerEmail}</div>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td style={{ padding: '16px 18px', borderBottom: '1px solid var(--ws-line)', verticalAlign: 'middle' }}>
+                                                            <span style={{ background: 'var(--ws-sand)', color: 'var(--ws-ink)', padding: '4px 8px', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px', border: '1px solid var(--ws-line)' }}>
+                                                                {store.vanityHandle ? `/shop/${store.vanityHandle}` : 'Not Set'}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ padding: '16px 18px', borderBottom: '1px solid var(--ws-line)', verticalAlign: 'middle' }}>
+                                                            <span style={{ background: store.isSuspended ? 'var(--ws-danger-soft)' : '#dcfce7', color: store.isSuspended ? 'var(--ws-danger)' : '#166534', padding: '4px 10px', borderRadius: '999px', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase' }}>
+                                                                {store.isSuspended ? 'Suspended' : 'Live'}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ padding: '16px 18px', borderBottom: '1px solid var(--ws-line)', verticalAlign: 'middle', textAlign: 'right' }}>
+                                                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                                                {store.vanityHandle && (
+                                                                    <a href={`/shop/${store.vanityHandle}`} target="_blank" rel="noopener noreferrer" title="View Live Store" style={{ background: 'var(--ws-cream)', color: 'var(--ws-ink)', padding: '6px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', textDecoration: 'none', border: '1px solid var(--ws-line)' }}>
+                                                                        <i className="fa-solid fa-eye"></i>
+                                                                    </a>
+                                                                )}
+                                                                <button 
+                                                                    onClick={() => toggleStoreSuspension(store.sellerEmail, store.isSuspended)}
+                                                                    title={store.isSuspended ? 'Re-enable Storefront' : 'Suspend Storefront'}
+                                                                    style={{ background: store.isSuspended ? '#dcfce7' : 'var(--ws-danger-soft)', color: store.isSuspended ? '#16a34a' : 'var(--ws-danger)', padding: '6px 10px', borderRadius: '6px', fontSize: '12px', border: 'none', cursor: 'pointer' }}
+                                                                >
+                                                                    {store.isSuspended ? <i className="fa-solid fa-check"></i> : <i className="fa-solid fa-ban"></i>}
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => setEditingSellerEmail(store.sellerEmail)}
+                                                                    title="Edit Store Layout"
+                                                                    style={{ background: 'var(--ws-ink)', color: 'var(--ws-cream)', padding: '6px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                                                >
+                                                                    <i className="fa-solid fa-pen-to-square"></i> Edit
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             )}
