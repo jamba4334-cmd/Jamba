@@ -452,6 +452,7 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                         <SellerStorefrontEditor 
                             adminSellerEmail={editingSellerEmail} 
                             onBackToAdmin={() => setEditingSellerEmail(null)} 
+                            getAuthHeaders={getAuthHeaders} 
                         />
                     ) : (
                         <>

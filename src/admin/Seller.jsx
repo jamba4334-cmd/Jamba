@@ -849,8 +849,9 @@ export default function SellerDashboard() {
 
                 {activeTab === 'promos' && <SellerPromoTab getAuthHeaders={getAuthHeaders} />}
                 
-                {/* 🔥 NEW: Render Storefront and Subscription Tabs dynamically inside the panel */}
-                {activeTab === 'storefront' && <SellerStorefrontEditor />}
+                {/* 🔥 FIXED: Now passing getAuthHeaders and sellerEmail into the Storefront component */}
+                {activeTab === 'storefront' && <SellerStorefrontEditor getAuthHeaders={getAuthHeaders} sellerEmail={sellerEmail} />}
+
                 {activeTab === 'subscription' && <SellerSubscription />}
 
                 <ReviewsTab isActive={activeTab === 'reviews'} sellerReviews={sellerReviews} replyingTo={replyingTo} setReplyingTo={setReplyingTo} replyText={replyText} setReplyText={setReplyText} handlePostReply={handlePostReply} setFullscreenImage={setFullscreenImage} />

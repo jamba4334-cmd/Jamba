@@ -218,13 +218,17 @@ export default function AdminLayout() {
         }
     }, [isAuthenticated, subAdminMaxDuration]);
 
+    // Use the signed-in administrator's short-lived Firebase ID token.
     const getAuthHeaders = async () => {
         const user = auth.currentUser;
-        if (!user) return { 'Content-Type': 'application/json' };
-        const token = await user.getIdToken();
+        if (!user) {
+            throw new Error("Your admin session has expired. Please sign in again.");
+        }
+
+        const idToken = await user.getIdToken();
         return {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${idToken}`
         };
     };
 

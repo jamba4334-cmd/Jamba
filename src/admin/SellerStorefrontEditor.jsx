@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
+import { API_BASE_URL } from '../apiConfig.js';
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import './SellerStorefrontEditor.css';
 
-export default function SellerStorefrontEditor({ adminSellerEmail, onBackToAdmin }) {
-    const auth = getAuth();
-    const user = auth.currentUser;
-    const targetEmail = adminSellerEmail || user?.email;
+// 🔥 FIXED: Completely removed Firebase Auth. The editor now relies entirely on the passed emails and hardcoded key.
+export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, onBackToAdmin, getAuthHeaders }) {
+    
+    // 🔥 The editor safely resolves the email from either the Admin Tab or Seller Tab
+    const targetEmail = adminSellerEmail || sellerEmail;
 
     const [isSaving, setIsSaving] = useState(false);
     const [uploadingTarget, setUploadingTarget] = useState(null);
@@ -88,50 +89,48 @@ export default function SellerStorefrontEditor({ adminSellerEmail, onBackToAdmin
 
     const genId = () => Math.random().toString(36).substr(2, 9);
 
-    // 🔥 BULLETPROOF AUTH CHECK: Forces Firebase to resolve the current session securely
+    // Save with the Firebase ID token supplied by the authenticated admin layout.
     const saveStorefront = async () => {
-        if (!targetEmail) return;
+        if (!targetEmail) {
+            alert("Error: Target seller email is missing.");
+            return;
+        }
+        if (typeof getAuthHeaders !== "function") {
+            alert("Error: Admin authentication is unavailable. Refresh the page and sign in again.");
+            return;
+        }
+
         setIsSaving(true);
         try {
-            const token = await new Promise((resolve, reject) => {
-                const unsubscribe = onAuthStateChanged(getAuth(), async (activeUser) => {
-                    unsubscribe();
-                    if (activeUser) {
-                        resolve(await activeUser.getIdToken());
-                    } else {
-                        reject(new Error("Auth session desynchronized. Please log out and log back in."));
-                    }
-                });
-            });
-            
+            const headers = await getAuthHeaders();
             const payload = {
-                storefront: { 
-                    brandName, brandLogo, brandColor, headerType, headerBanner, 
-                    modules, pages: customPages, updatedAt: new Date().toISOString() 
+                storefront: {
+                    brandName, brandLogo, brandColor, headerType, headerBanner,
+                    modules, pages: customPages, updatedAt: new Date().toISOString()
                 }
             };
 
-            const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
-            const response = await fetch(`${apiUrl}/admin/seller_profiles/${targetEmail}`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.error || "Server rejected the save.");
+            const apiUrl = API_BASE_URL.replace(/\/+$/, "");
+            if (!apiUrl) {
+                throw new Error("Render API base URL is missing in src/apiConfig.js.");
             }
 
-            alert(adminSellerEmail ? `Storefront updated for ${adminSellerEmail}!` : "Storefront and Pages published successfully!");
-        } catch (e) { 
-            console.error(e);
-            alert("Error saving: " + e.message); 
+            const response = await fetch(
+                `${apiUrl}/admin/seller_profiles/${encodeURIComponent(targetEmail)}`,
+                { method: "PUT", headers, body: JSON.stringify(payload) }
+            );
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(result.error || `Save failed (HTTP ${response.status}).`);
+            }
+
+            alert(`Storefront updated for ${targetEmail}.`);
+        } catch (error) {
+            console.error("Storefront save failed:", error);
+            alert("Error saving: " + error.message);
+        } finally {
+            setIsSaving(false);
         }
-        setIsSaving(false);
     };
 
     const handleUpload = async (e, callback) => {
