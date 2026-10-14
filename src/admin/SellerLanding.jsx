@@ -29,7 +29,7 @@ export default function SellerLanding() {
     const [formData, setFormData] = useState({
         ownerName: '',
         brandName: '',
-        email: '',
+        email: '', // Will be strictly populated by Google Auth
         phone: '',
         whatsapp: '',
         hasGst: 'yes',
@@ -52,16 +52,56 @@ export default function SellerLanding() {
         setFormStep(2);
     };
 
+    // 🔥 SECURE ONBOARDING PIPELINE
+    const handleSecureAuth = async () => {
+        setIsLoggingIn(true);
+        setLoginError("");
+        const auth = getAuth();
+        const provider = new GoogleAuthProvider();
+
+        try {
+            const result = await signInWithPopup(auth, provider);
+            const userEmail = result.user.email.toLowerCase();
+
+            // 1. Check if already an authorized active seller
+            const approvedRef = doc(db, "authorized_sellers", userEmail);
+            const approvedSnap = await getDoc(approvedRef);
+            if (approvedSnap.exists()) {
+                navigate('/seller'); 
+                return;
+            }
+
+            // 2. Check if application is already pending
+            const appRef = doc(db, "seller_applications", userEmail);
+            const appSnap = await getDoc(appRef);
+            if (appSnap.exists()) {
+                const appData = appSnap.data();
+                if (appData.status === "kyc_submitted" || appData.status === "pending_kyc") {
+                    navigate('/seller/kyc'); 
+                    return;
+                }
+            }
+
+            // 3. New Application: Lock in their verified Google email and show form
+            setFormData(prev => ({ ...prev, email: userEmail }));
+            setShowForm(true);
+
+        } catch (error) {
+            console.error("Auth Error:", error);
+            setLoginError("Google Sign-In failed or was blocked. Verification is required.");
+        } finally {
+            setIsLoggingIn(false);
+        }
+    };
+
     const handleSupabaseFileUpload = async (e, fieldName) => {
         const file = e.target.files[0];
         if (!file) return;
         
         if (!formData.email) {
-            alert("Please enter your business email address in Step 1 first before uploading files.");
-            setFormStep(1);
+            alert("Security Error: Verified email is missing.");
             return;
         }
-
         if (!supabase) {
             alert("Configuration Error: Supabase connection keys are missing in the .env file.");
             return;
@@ -74,14 +114,12 @@ export default function SellerLanding() {
             const fileName = `${safeEmail}_${fieldName}_${Date.now()}.${fileExt}`;
             const filePath = `${fileName}`;
 
-            // 🔥 Uploads directly to your specific "kyc-documents" bucket
             const { data, error } = await supabase.storage
                 .from('kyc-documents')
                 .upload(filePath, file, { cacheControl: '3600', upsert: false });
 
             if (error) throw error;
 
-            // 🔥 Retrieves public URL from the same "kyc-documents" bucket
             const { data: publicUrlData } = supabase.storage
                 .from('kyc-documents')
                 .getPublicUrl(filePath);
@@ -113,6 +151,12 @@ export default function SellerLanding() {
         setAuthError("");
 
         try {
+            // Re-verify auth state before database hit
+            const auth = getAuth();
+            if (!auth.currentUser) {
+                throw new Error("Your secure session expired. Please log in again.");
+            }
+
             const targetEmail = formData.email.toLowerCase().trim();
             const isGstRegistered = formData.hasGst === 'yes';
             
@@ -142,44 +186,7 @@ export default function SellerLanding() {
             setRegistrationSuccess(true);
         } catch (error) {
             setIsSubmitting(false);
-            setAuthError(error?.message || "Something went wrong while connecting to the database.");
-        }
-    };
-
-    const handleSellerLogin = async () => {
-        setIsLoggingIn(true);
-        setLoginError("");
-        const auth = getAuth();
-        const provider = new GoogleAuthProvider();
-
-        try {
-            const result = await signInWithPopup(auth, provider);
-            const userEmail = result.user.email.toLowerCase();
-
-            const approvedRef = doc(db, "authorized_sellers", userEmail);
-            const approvedSnap = await getDoc(approvedRef);
-
-            if (approvedSnap.exists()) {
-                navigate('/seller'); 
-            } else {
-                const appRef = doc(db, "seller_applications", userEmail);
-                const appSnap = await getDoc(appRef);
-
-                if (appSnap.exists()) {
-                    const appData = appSnap.data();
-                    if (appData.status === "kyc_submitted" || appData.status === "pending_kyc") {
-                        navigate('/seller/kyc'); 
-                    }
-                } else {
-                    await auth.signOut(); 
-                    setLoginError("No seller account found for this email. Please register below.");
-                }
-            }
-        } catch (error) {
-            console.error(error);
-            setLoginError("Authentication failed. Please try again.");
-        } finally {
-            setIsLoggingIn(false);
+            setAuthError(error?.message || "Permission Denied: Could not connect to the secured database.");
         }
     };
 
@@ -192,7 +199,7 @@ export default function SellerLanding() {
                             if (formStep === 2) setFormStep(1);
                             else setShowForm(false);
                         }} className="seller-back-link">
-                            <i className="fa-solid fa-arrow-left"></i> {formStep === 2 ? 'Back to Basic Info' : 'Back to Info'}
+                            <i className="fa-solid fa-arrow-left"></i> {formStep === 2 ? 'Back to Basic Info' : 'Cancel Application'}
                         </button>
                     )}
 
@@ -200,7 +207,7 @@ export default function SellerLanding() {
                         {!registrationSuccess ? (
                             <>
                                 <div className="seller-form-header">
-                                    <span className="seller-eyebrow">Jamba Wear · Seller Onboarding</span>
+                                    <span className="seller-eyebrow">Jamba Wear · Secured Onboarding</span>
                                     <h2 className="seller-form-title">{formStep === 1 ? 'Create Seller Account' : 'Legal & KYC Details'}</h2>
                                     <p className="seller-form-subtitle">Step {formStep} of 2 — {formStep === 1 ? 'Basic store details' : 'Verify your identity & banking via Supabase'}</p>
                                     <div className="seller-progress">
@@ -218,6 +225,18 @@ export default function SellerLanding() {
 
                                     {formStep === 1 ? (
                                         <form onSubmit={handleNextStep}>
+                                            <div className="form-group">
+                                                <label>Business Email Address (Verified via Google)</label>
+                                                <input 
+                                                    type="email" 
+                                                    name="email" 
+                                                    value={formData.email} 
+                                                    readOnly 
+                                                    required 
+                                                    style={{ background: '#f3f4f6', color: '#6b7280', cursor: 'not-allowed', border: '1px solid #d1d5db' }} 
+                                                />
+                                            </div>
+
                                             <div className="form-grid-row">
                                                 <div className="form-group">
                                                     <label>Brand / Store Name</label>
@@ -227,11 +246,6 @@ export default function SellerLanding() {
                                                     <label>Owner Full Name</label>
                                                     <input type="text" name="ownerName" value={formData.ownerName} onChange={handleInputChange} required placeholder="John Doe" />
                                                 </div>
-                                            </div>
-
-                                            <div className="form-group">
-                                                <label>Business Email Address</label>
-                                                <input type="email" name="email" value={formData.email} onChange={handleInputChange} required placeholder="store@example.com" />
                                             </div>
 
                                             <div className="form-grid-row">
@@ -366,16 +380,12 @@ export default function SellerLanding() {
                         Join Jamba Wear, the premier marketplace for authentic traditional fashion. Reach thousands of customers across India, manage your inventory effortlessly, and grow your business today.
                     </p>
                     <div className="seller-hero-actions">
-                        <button onClick={() => setShowForm(true)} className="seller-btn-primary">
-                            Start Selling Today
+                        <button onClick={handleSecureAuth} disabled={isLoggingIn} className="seller-btn-primary">
+                            {isLoggingIn ? <><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: '8px' }}></i> Authenticating...</> : "Start Selling Today"}
                         </button>
                         
-                        <button onClick={handleSellerLogin} disabled={isLoggingIn} className="seller-btn-ghost">
-                            {isLoggingIn ? (
-                                <><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: '8px' }}></i> Authenticating...</>
-                            ) : (
-                                <><i className="fa-brands fa-google" style={{ marginRight: '8px' }}></i> Login to Dashboard</>
-                            )}
+                        <button onClick={handleSecureAuth} disabled={isLoggingIn} className="seller-btn-ghost">
+                            {isLoggingIn ? <><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: '8px' }}></i> Authenticating...</> : <><i className="fa-brands fa-google" style={{ marginRight: '8px' }}></i> Login to Dashboard</>}
                         </button>
                     </div>
 
