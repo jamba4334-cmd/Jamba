@@ -4,7 +4,7 @@ import "../styles/Sellers.css";
 
 // ⚠️ ADJUST THIS RELATIVE PATH IF YOUR FIREBASE FILE IS LOCATED ELSEWHERE
 import { db } from '../../firebase'; 
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
 
 // ⚠️ ADJUST THIS RELATIVE PATH TO POINT TO YOUR EDITOR COMPONENT
 import SellerStorefrontEditor from '../../admin/SellerStorefrontEditor'; 
@@ -45,13 +45,16 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                 setIsLoadingApplications(false);
                 return;
             }
-            const q = query(collection(db, "users"), where("kyc_status", "==", "pending_kyc"));
-            const querySnapshot = await getDocs(q);
             
-            const appsData = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
+            const querySnapshot = await getDocs(collection(db, "seller_applications"));
+            
+            const appsData = [];
+            querySnapshot.forEach((docSnap) => {
+                const data = docSnap.data();
+                if (data.status === 'kyc_submitted' || data.status === 'pending_kyc') {
+                    appsData.push({ id: docSnap.id, ...data });
+                }
+            });
             
             setPendingApplications(appsData);
         } catch (error) {
@@ -110,32 +113,49 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
         if (!window.confirm(`Are you sure you want to approve ${app.brandName}?`)) return;
         
         try {
-            await updateDoc(doc(db, "users", app.id), { kyc_status: "approved" });
-            
-            const headers = typeof getAuthHeaders === 'function' ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
-            await fetch(`${API_BASE_URL}/admin/sellers`, {
-                method: "POST",
-                headers: headers,
-                body: JSON.stringify({ email: app.email })
+            // 1. Move the seller into the authorized_sellers collection (Database First)
+            await setDoc(doc(db, 'authorized_sellers', app.email), {
+                email: app.email,
+                brandName: app.brandName,
+                ownerName: app.ownerName,
+                phone: app.phone || '',
+                approvedAt: new Date().toISOString(),
+                kycData: app.kycData || null
             });
+            
+            // 2. Mark the application as approved
+            await updateDoc(doc(db, "seller_applications", app.id), { status: "approved" });
+            
+            // 3. Keep backend logic running in a non-blocking way
+            try {
+                const headers = typeof getAuthHeaders === 'function' ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
+                await fetch(`${API_BASE_URL}/admin/sellers`, {
+                    method: "POST",
+                    headers: headers,
+                    body: JSON.stringify({ email: app.email })
+                });
+            } catch (fetchError) {
+                console.warn("Backend Python API sync failed (Server might be off), but Firebase approval succeeded.", fetchError);
+            }
 
             if (window.showToast) window.showToast(`${app.brandName} approved!`);
             fetchApplications();
             if (typeof loadAuthorizedSellers === 'function') loadAuthorizedSellers(); 
         } catch (error) {
             console.error("Error approving seller:", error);
-            alert("Failed to approve seller. Check console for details.");
+            alert(`Approval Failed: ${error.message}`);
         }
     };
 
     const handleRejectApplication = async (appId) => {
         if (!window.confirm("Are you sure you want to reject this application?")) return;
         try {
-            await updateDoc(doc(db, "users", appId), { kyc_status: "rejected" });
+            await updateDoc(doc(db, "seller_applications", appId), { status: "rejected" });
             fetchApplications();
             if (window.showToast) window.showToast("Application rejected.");
         } catch (error) {
             console.error("Error rejecting application:", error);
+            alert(`Rejection Failed: ${error.message}`);
         }
     };
 
@@ -374,13 +394,13 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                 </>
             )}
 
-            {/* TAB 2: PENDING ONBOARDING QUEUE */}
+            {/* 🔥 TAB 2: PENDING ONBOARDING QUEUE (UPDATED UI) 🔥 */}
             {mainViewTab === "onboarding" && (
                 <div className="card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                         <div>
                             <span className="section-subtitle" style={{ margin: 0, padding: 0 }}>Merchant Onboarding Requests</span>
-                            <p className="text-helper" style={{ margin: '4px 0 0 0' }}>Review submitted seller details and approve or reject applications.</p>
+                            <p className="text-helper" style={{ margin: '4px 0 0 0' }}>Review submitted seller details, verify documents, and approve applications.</p>
                         </div>
                         <button type="button" onClick={fetchApplications} className="btn-submit" style={{ padding: '8px 16px', width: 'auto', margin: 0, backgroundColor: '#f3f4f6', color: '#111', border: '1px solid #d1d5db' }}>
                             <i className="fa-solid fa-rotate-right"></i> Refresh
@@ -394,45 +414,82 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                             <p style={{ color: '#6b7280', margin: 0 }}>No pending merchant applications right now.</p>
                         </div>
                     ) : (
-                        <div className="onboarding-table-wrapper">
-                            <table className="onboarding-table">
+                        <div className="onboarding-table-wrapper" style={{ overflowX: 'auto' }}>
+                            <table className="onboarding-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                 <thead>
-                                    <tr>
-                                        <th>Brand & Owner</th>
-                                        <th>Contact Info</th>
-                                        <th>Date Applied</th>
-                                        <th style={{ textAlign: 'right' }}>Actions</th>
+                                    <tr style={{ background: '#f9fafb', color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
+                                        <th style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb' }}>Brand & Contact</th>
+                                        <th style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb' }}>GST Status</th>
+                                        <th style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb' }}>Banking & Identity</th>
+                                        <th style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb' }}>Legal Documents</th>
+                                        <th style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {pendingApplications.map(app => (
-                                        <tr key={app.id}>
-                                            <td>
-                                                <strong style={{ display: 'block', color: '#111', fontSize: '14px' }}>{app.brandName}</strong>
-                                                <span style={{ fontSize: '13px', color: '#6b7280' }}>{app.ownerName}</span>
+                                        <tr key={app.id} style={{ borderBottom: '1px solid #e5e7eb', fontSize: '14px' }}>
+                                            {/* 1. Brand & Contact */}
+                                            <td style={{ padding: '16px' }}>
+                                                <div style={{ fontWeight: '700', color: '#111827', fontSize: '15px' }}>{app.brandName}</div>
+                                                <div style={{ color: '#4b5563', fontSize: '13px', marginBottom: '6px' }}>{app.ownerName}</div>
+                                                <div style={{ color: '#6b7280', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                                                    <i className="fa-solid fa-envelope"></i> {app.email}
+                                                </div>
+                                                <div style={{ color: '#6b7280', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <i className="fa-solid fa-phone"></i> {app.phone}
+                                                </div>
                                             </td>
-                                            <td style={{ fontSize: '13px', color: '#374151' }}>
-                                                <div style={{ marginBottom: '4px' }}><i className="fa-regular fa-envelope" style={{ width: '16px' }}></i> {app.email}</div>
-                                                <div style={{ marginBottom: '4px' }}><i className="fa-solid fa-phone" style={{ width: '16px' }}></i> {app.phone}</div>
-                                                <div style={{ color: '#059669' }}><i className="fa-brands fa-whatsapp" style={{ width: '16px' }}></i> {app.whatsapp}</div>
+
+                                            {/* 2. GST Status */}
+                                            <td style={{ padding: '16px' }}>
+                                                <span style={{ 
+                                                    background: app.kycData?.hasGst ? '#dcfce7' : '#fef3c7', 
+                                                    color: app.kycData?.hasGst ? '#166534' : '#92400e', 
+                                                    padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '700', display: 'inline-block', marginBottom: '8px'
+                                                }}>
+                                                    {app.kycData?.hasGst ? 'GST Registered' : 'Without GST'}
+                                                </span>
+                                                <div style={{ fontSize: '12px', color: '#374151' }}>
+                                                    <strong>GSTIN:</strong><br/>
+                                                    <span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{app.kycData?.gstNumber || 'N/A'}</span>
+                                                </div>
                                             </td>
-                                            <td style={{ fontSize: '13px', color: '#6b7280' }}>
-                                                {app.createdAt ? new Date(app.createdAt.toDate ? app.createdAt.toDate() : app.createdAt).toLocaleDateString() : 'N/A'}
+
+                                            {/* 3. Banking & PAN */}
+                                            <td style={{ padding: '16px', fontSize: '13px', color: '#374151', lineHeight: '1.6' }}>
+                                                <div><strong style={{ color: '#111827' }}>PAN:</strong> {app.kycData?.panNumber || 'N/A'}</div>
+                                                <div><strong style={{ color: '#111827' }}>A/C:</strong> {app.kycData?.accountNumber || 'N/A'}</div>
+                                                <div><strong style={{ color: '#111827' }}>IFSC:</strong> {app.kycData?.ifscCode || 'N/A'}</div>
                                             </td>
-                                            <td style={{ textAlign: 'right' }}>
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => handleApproveApplication(app)}
-                                                    className="btn-approve"
-                                                >
-                                                    Approve
+
+                                            {/* 4. Document Links */}
+                                            <td style={{ padding: '16px' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    {app.kycData?.gstPdfUrl && (
+                                                        <a href={app.kycData.gstPdfUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', textDecoration: 'none', color: '#2563eb', display: 'flex', alignItems: 'center', gap: '6px', background: '#eff6ff', padding: '6px 10px', borderRadius: '6px' }}>
+                                                            <i className="fa-solid fa-file-pdf"></i> GST Certificate
+                                                        </a>
+                                                    )}
+                                                    {app.kycData?.bankProofUrl && (
+                                                        <a href={app.kycData.bankProofUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', textDecoration: 'none', color: '#059669', display: 'flex', alignItems: 'center', gap: '6px', background: '#ecfdf5', padding: '6px 10px', borderRadius: '6px' }}>
+                                                            <i className="fa-solid fa-image"></i> Bank Proof
+                                                        </a>
+                                                    )}
+                                                    {app.kycData?.maskedAadhaarUrl && (
+                                                        <a href={app.kycData.maskedAadhaarUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', textDecoration: 'none', color: '#7c3aed', display: 'flex', alignItems: 'center', gap: '6px', background: '#f5f3ff', padding: '6px 10px', borderRadius: '6px' }}>
+                                                            <i className="fa-solid fa-id-card"></i> ID Document
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </td>
+
+                                            {/* 5. Actions */}
+                                            <td style={{ padding: '16px', verticalAlign: 'middle', textAlign: 'right' }}>
+                                                <button onClick={() => handleApproveApplication(app)} style={{ background: '#10b981', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', width: '100%', marginBottom: '8px', display: 'flex', justifyContent: 'center', gap: '6px', alignItems: 'center' }}>
+                                                    <i className="fa-solid fa-check"></i> Approve
                                                 </button>
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => handleRejectApplication(app.id)}
-                                                    className="btn-reject"
-                                                >
-                                                    Reject
+                                                <button onClick={() => handleRejectApplication(app.id)} style={{ background: '#fff', color: '#ef4444', border: '1px solid #f87171', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', width: '100%', display: 'flex', justifyContent: 'center', gap: '6px', alignItems: 'center' }}>
+                                                    <i className="fa-solid fa-xmark"></i> Reject
                                                 </button>
                                             </td>
                                         </tr>
@@ -444,7 +501,7 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                 </div>
             )}
 
-            {/* 🔥 NEW TAB 3: LIVE STOREFRONTS MONITORING 🔥 */}
+            {/* TAB 3: LIVE STOREFRONTS MONITORING */}
             {mainViewTab === "storefronts" && (
                 <div className="card" style={{ padding: editingSellerEmail ? '0' : '28px', background: editingSellerEmail ? 'transparent' : 'var(--ws-cream)', border: editingSellerEmail ? 'none' : '1px solid var(--ws-line)', boxShadow: editingSellerEmail ? 'none' : 'var(--ws-shadow)' }}>
                     

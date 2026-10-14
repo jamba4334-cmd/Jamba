@@ -7,7 +7,7 @@ import { setDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { createClient } from '@supabase/supabase-js';
 
-// 🔥 FIXED: Safe initialization prevents module crashes if .env is missing
+// Safe initialization prevents module crashes if .env keys are missing
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
@@ -62,7 +62,6 @@ export default function SellerLanding() {
             return;
         }
 
-        // 🔥 CRASH PROTECTION: Warns if Supabase keys are missing
         if (!supabase) {
             alert("Configuration Error: Supabase connection keys are missing in the .env file.");
             return;
@@ -75,14 +74,16 @@ export default function SellerLanding() {
             const fileName = `${safeEmail}_${fieldName}_${Date.now()}.${fileExt}`;
             const filePath = `${fileName}`;
 
+            // 🔥 Uploads directly to your specific "kyc-documents" bucket
             const { data, error } = await supabase.storage
-                .from('seller-kyc-docs')
+                .from('kyc-documents')
                 .upload(filePath, file, { cacheControl: '3600', upsert: false });
 
             if (error) throw error;
 
+            // 🔥 Retrieves public URL from the same "kyc-documents" bucket
             const { data: publicUrlData } = supabase.storage
-                .from('seller-kyc-docs')
+                .from('kyc-documents')
                 .getPublicUrl(filePath);
 
             if (publicUrlData?.publicUrl) {
