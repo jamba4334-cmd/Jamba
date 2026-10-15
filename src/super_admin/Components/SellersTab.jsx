@@ -1,438 +1,765 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import './SellerLanding.css';
+import React, { useState, useEffect } from "react";
+import { API_BASE_URL } from "../../apiConfig.js"; 
+import "../styles/Sellers.css";
 
-import { db } from '../firebase'; 
-import { setDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
-import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { createClient } from '@supabase/supabase-js';
+// ⚠️ ADJUST THIS RELATIVE PATH IF YOUR FIREBASE FILE IS LOCATED ELSEWHERE
+import { db } from '../../firebase'; 
+import { collection, query, where, getDocs, doc, updateDoc, setDoc , serverTimestamp } from "firebase/firestore";
+import { getAuth } from 'firebase/auth';
 
-// Safe initialization prevents module crashes if .env keys are missing
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
+// ⚠️ ADJUST THIS RELATIVE PATH TO POINT TO YOUR EDITOR COMPONENT
+import SellerStorefrontEditor from '../../admin/SellerStorefrontEditor'; 
 
-export default function SellerLanding() {
-    const navigate = useNavigate();
+export default function SellersTab({ getAuthHeaders, globalSellers = [], liveProducts = [], orders = [], loadAuthorizedSellers }) {
+    // --- State Management ---
+    const [mainViewTab, setMainViewTab] = useState("directory"); 
 
-    const [showForm, setShowForm] = useState(false);
-    const [formStep, setFormStep] = useState(1); 
-    
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [registrationSuccess, setRegistrationSuccess] = useState(false);
-    const [uploadingTarget, setUploadingTarget] = useState(null);
-    
-    const [authError, setAuthError] = useState("");
-    const [isLoggingIn, setIsLoggingIn] = useState(false);
-    const [loginError, setLoginError] = useState("");
+    const [newSellerEmail, setNewSellerEmail] = useState("");
+    const [isAuthorizing, setIsAuthorizing] = useState(false);
+    const [selectedSeller, setSelectedSeller] = useState(null);
+    const [sellerModalTab, setSellerModalTab] = useState("profile");
+    const [sellerPayouts, setSellerPayouts] = useState([]);
+    const [editProfileData, setEditProfileData] = useState({});
+    const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-    const [formData, setFormData] = useState({
-        ownerName: '',
-        brandName: '',
-        email: '', 
-        phone: '',
-        whatsapp: '',
-        hasGst: 'yes',
-        gstNumber: '',
-        panNumber: '',
-        accountNumber: '',
-        ifscCode: '',
-        gstPdfUrl: '',
-        bankProofUrl: '',
-        maskedAadhaarUrl: ''
-    });
+    // Onboarding States
+    const [pendingApplications, setPendingApplications] = useState([]);
+    const [isLoadingApplications, setIsLoadingApplications] = useState(false);
 
-    const handleInputChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-        setAuthError("");
-    };
+    // Storefront Monitor States
+    const [storefronts, setStorefronts] = useState([]);
+    const [isLoadingStorefronts, setIsLoadingStorefronts] = useState(false);
+    const [editingSellerEmail, setEditingSellerEmail] = useState(null);
 
-    const handleNextStep = (e) => {
-        e.preventDefault(); 
-        setFormStep(2);
-    };
+    // --- Fetch Pending Applications ---
+    useEffect(() => {
+        if (mainViewTab === "onboarding") {
+            fetchApplications();
+        }
+    }, [mainViewTab]);
 
-    // 🔥 SECURE ONBOARDING PIPELINE
-    const handleSecureAuth = async () => {
-        setIsLoggingIn(true);
-        setLoginError("");
-        const auth = getAuth();
-        const provider = new GoogleAuthProvider();
-
+    const fetchApplications = async () => {
+        setIsLoadingApplications(true);
         try {
-            const result = await signInWithPopup(auth, provider);
-            const userEmail = result.user.email.toLowerCase();
-
-            // 1. Check if already an authorized active seller
-            const approvedRef = doc(db, "authorized_sellers", userEmail);
-            const approvedSnap = await getDoc(approvedRef);
-            if (approvedSnap.exists()) {
-                navigate('/seller'); 
+            if (!db) {
+                console.error("Firebase DB instance is missing or not imported correctly.");
+                setIsLoadingApplications(false);
                 return;
             }
-
-            // 2. Check if application is already pending
-            const appRef = doc(db, "seller_applications", userEmail);
-            const appSnap = await getDoc(appRef);
-            if (appSnap.exists()) {
-                const appData = appSnap.data();
-                if (appData.status === "kyc_submitted" || appData.status === "pending_kyc") {
-                    navigate('/seller/kyc'); 
-                    return;
-                }
-            }
-
-            // 3. New Application: Lock in their verified Google email and show form
-            setFormData(prev => ({ ...prev, email: userEmail }));
-            setShowForm(true);
-
-        } catch (error) {
-            console.error("Auth Error:", error);
-            setLoginError("Google Sign-In failed or was blocked. Verification is required.");
-        } finally {
-            setIsLoggingIn(false);
-        }
-    };
-
-    const handleSupabaseFileUpload = async (e, fieldName) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        if (!formData.email) {
-            alert("Security Error: Verified email is missing.");
-            return;
-        }
-        if (!supabase) {
-            alert("Configuration Error: Supabase connection keys are missing in the .env file.");
-            return;
-        }
-
-        setUploadingTarget(fieldName);
-        try {
-            const fileExt = file.name.split('.').pop();
-            const safeEmail = formData.email.toLowerCase().replace(/[^a-z0-9]/g, '_');
-            const fileName = `${safeEmail}_${fieldName}_${Date.now()}.${fileExt}`;
-            const filePath = `${fileName}`;
-
-            const { data, error } = await supabase.storage
-                .from('kyc-documents')
-                .upload(filePath, file, { cacheControl: '3600', upsert: false });
-
-            if (error) throw error;
-
-            const { data: publicUrlData } = supabase.storage
-                .from('kyc-documents')
-                .getPublicUrl(filePath);
-
-            if (publicUrlData?.publicUrl) {
-                setFormData(prev => ({ ...prev, [fieldName]: publicUrlData.publicUrl }));
-            }
-        } catch (err) {
-            alert("Supabase Upload failed: " + (err.message || "Unknown error"));
-        } finally {
-            setUploadingTarget(null);
-            e.target.value = '';
-        }
-    };
-
-    const handleRegistration = async (e) => {
-        e.preventDefault();
-        
-        if (formData.hasGst === 'yes' && (!formData.gstPdfUrl || !formData.gstNumber)) {
-            setAuthError("Please provide your GST Number and upload your GST Certificate.");
-            return;
-        }
-        if (!formData.bankProofUrl || !formData.maskedAadhaarUrl) {
-            setAuthError("Please upload all required banking and ID documents.");
-            return;
-        }
-
-        setIsSubmitting(true);
-        setAuthError("");
-
-        try {
-            // Re-verify auth state before database hit
-            const auth = getAuth();
-            if (!auth.currentUser) {
-                throw new Error("Your secure session expired. Please log in again.");
-            }
-
-            const targetEmail = formData.email.toLowerCase().trim();
-            const isGstRegistered = formData.hasGst === 'yes';
             
-            await setDoc(doc(db, "seller_applications", targetEmail), {
-                email: targetEmail,
-                ownerName: formData.ownerName,
-                brandName: formData.brandName,
-                phone: formData.phone,
-                whatsapp: formData.whatsapp,
-                role: "seller",
-                status: "kyc_submitted", 
-                kycData: {
-                    hasGst: isGstRegistered,
-                    gstNumber: isGstRegistered ? formData.gstNumber.toUpperCase() : 'UNREGISTERED',
-                    gstPdfUrl: isGstRegistered ? formData.gstPdfUrl : null,
-                    panNumber: formData.panNumber.toUpperCase(),
-                    accountNumber: formData.accountNumber,
-                    ifscCode: formData.ifscCode.toUpperCase(),
-                    bankProofUrl: formData.bankProofUrl,
-                    maskedAadhaarUrl: formData.maskedAadhaarUrl
-                },
-                createdAt: serverTimestamp(),
-                submittedAt: new Date().toISOString()
+            const querySnapshot = await getDocs(collection(db, "seller_applications"));
+            
+            const appsData = [];
+            querySnapshot.forEach((docSnap) => {
+                const data = docSnap.data();
+                if (data.status === 'kyc_submitted' || data.status === 'pending_kyc') {
+                    appsData.push({ id: docSnap.id, ...data });
+                }
             });
-
-            setIsSubmitting(false);
-            setRegistrationSuccess(true);
+            
+            setPendingApplications(appsData);
         } catch (error) {
-            setIsSubmitting(false);
-            setAuthError(error?.message || "Permission Denied: Could not connect to the secured database.");
+            console.error("Error fetching pending applications:", error);
+        } finally {
+            setIsLoadingApplications(false);
         }
     };
 
-    if (showForm) {
-        return (
-            <div className="seller-form-page">
-                <div className="seller-form-shell">
-                    {!registrationSuccess && (
-                        <button type="button" onClick={() => {
-                            if (formStep === 2) setFormStep(1);
-                            else setShowForm(false);
-                        }} className="seller-back-link">
-                            <i className="fa-solid fa-arrow-left"></i> {formStep === 2 ? 'Back to Basic Info' : 'Cancel Application'}
-                        </button>
-                    )}
+    // --- Fetch Live Storefronts ---
+    useEffect(() => {
+        if (mainViewTab === "storefronts" && !editingSellerEmail) {
+            fetchStorefronts();
+        }
+    }, [mainViewTab, editingSellerEmail]);
 
-                    <div className="seller-form-card">
-                        {!registrationSuccess ? (
-                            <>
-                                <div className="seller-form-header">
-                                    <span className="seller-eyebrow">Jamba Wear · Secured Onboarding</span>
-                                    <h2 className="seller-form-title">{formStep === 1 ? 'Create Seller Account' : 'Legal & KYC Details'}</h2>
-                                    <p className="seller-form-subtitle">Step {formStep} of 2 — {formStep === 1 ? 'Basic store details' : 'Verify your identity & banking via Supabase'}</p>
-                                    <div className="seller-progress">
-                                        <span className="seller-progress-bar is-active"></span>
-                                        <span className={`seller-progress-bar ${formStep === 2 ? 'is-active' : ''}`}></span>
-                                    </div>
-                                </div>
+    const fetchStorefronts = async () => {
+        setIsLoadingStorefronts(true);
+        try {
+            const profilesSnap = await getDocs(collection(db, "seller_profiles"));
+            const stores = [];
+            profilesSnap.forEach(profileDoc => {
+                const data = profileDoc.data();
+                if (data.storefront) {
+                    stores.push({
+                        sellerEmail: profileDoc.id,
+                        ...data.storefront
+                    });
+                }
+            });
+            setStorefronts(stores);
+        } catch (error) {
+            console.error("Error fetching storefronts:", error);
+        } finally {
+            setIsLoadingStorefronts(false);
+        }
+    };
 
-                                <div className="seller-form-body">
-                                    {authError && (
-                                        <div className="auth-error">
-                                            <i className="fa-solid fa-circle-exclamation"></i> {authError}
-                                        </div>
-                                    )}
+    const toggleStoreSuspension = async (sellerEmail, currentStatus) => {
+        if (!window.confirm(`Are you sure you want to ${currentStatus ? 'enable' : 'suspend'} this storefront?`)) return;
+        try {
+            const profileRef = doc(db, "seller_profiles", sellerEmail);
+            await updateDoc(profileRef, {
+                "storefront.isSuspended": !currentStatus
+            });
+            setStorefronts(prev => prev.map(store => 
+                store.sellerEmail === sellerEmail ? { ...store, isSuspended: !currentStatus } : store
+            ));
+        } catch (error) {
+            alert("Failed to update store status.");
+        }
+    };
 
-                                    {formStep === 1 ? (
-                                        <form onSubmit={handleNextStep}>
-                                            <div className="form-group">
-                                                <label>Business Email Address (Verified via Google)</label>
-                                                <input 
-                                                    type="email" 
-                                                    name="email" 
-                                                    value={formData.email} 
-                                                    readOnly 
-                                                    required 
-                                                    style={{ background: '#f3f4f6', color: '#6b7280', cursor: 'not-allowed', border: '1px solid #d1d5db' }} 
-                                                />
-                                            </div>
+    // --- Action Handlers: Onboarding ---
+    const handleApproveApplication = async (app) => {
+        if (!window.confirm(`Are you sure you want to approve ${app.brandName}?`)) return;
+        
+        try {
+            // 1. Move the seller into the authorized_sellers collection (Database First)
+            await setDoc(doc(db, 'authorized_sellers', app.email), {
+                email: app.email,
+                brandName: app.brandName,
+                ownerName: app.ownerName,
+                phone: app.phone || '',
+                approvedAt: new Date().toISOString(),
+                kycData: app.kycData || null
+            });
+            
+            // 2. Mark the application as approved
+            await updateDoc(doc(db, "seller_applications", app.id), {
+                status: "approved",
+                approvedAt: serverTimestamp(),
+                reviewedBy: getAuth().currentUser?.email || null,
+                rejectionReason: null,
+                rejectedAt: null
+            });
+            
+            // 3. Keep backend logic running in a non-blocking way
+            try {
+                const headers = typeof getAuthHeaders === 'function' ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
+                await fetch(`${API_BASE_URL}/admin/sellers`, {
+                    method: "POST",
+                    headers: headers,
+                    body: JSON.stringify({ email: app.email })
+                });
+            } catch (fetchError) {
+                console.warn("Backend Python API sync failed (Server might be off), but Firebase approval succeeded.", fetchError);
+            }
 
-                                            <div className="form-grid-row">
-                                                <div className="form-group">
-                                                    <label>Brand / Store Name</label>
-                                                    <input type="text" name="brandName" value={formData.brandName} onChange={handleInputChange} required placeholder="e.g. Bodo Weavers" />
-                                                </div>
-                                                <div className="form-group">
-                                                    <label>Owner Full Name</label>
-                                                    <input type="text" name="ownerName" value={formData.ownerName} onChange={handleInputChange} required placeholder="John Doe" />
-                                                </div>
-                                            </div>
+            if (window.showToast) window.showToast(`${app.brandName} approved!`);
+            fetchApplications();
+            if (typeof loadAuthorizedSellers === 'function') loadAuthorizedSellers(); 
+        } catch (error) {
+            console.error("Error approving seller:", error);
+            if (error && error.code === "permission-denied") {
+                const signedInAs = getAuth().currentUser?.email || "an unknown account";
+                alert(`Approval Failed: the database blocked this action.\n\nYou are signed in as: ${signedInAs}\n\nSign out and sign back in with the admin account (jamba4334@gmail.com), and make sure the latest Firestore rules are published in the Firebase Console.`);
+            } else {
+                alert(`Approval Failed: ${error.message}`);
+            }
+        }
+    };
 
-                                            <div className="form-grid-row">
-                                                <div className="form-group">
-                                                    <label>Phone Number</label>
-                                                    <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} required minLength={10} maxLength={10} placeholder="9876543210" />
-                                                </div>
-                                                <div className="form-group">
-                                                    <label>WhatsApp Number</label>
-                                                    <input type="tel" name="whatsapp" value={formData.whatsapp} onChange={handleInputChange} required minLength={10} maxLength={10} placeholder="9876543210" />
-                                                </div>
-                                            </div>
-
-                                            <div className="form-notice">
-                                                <i className="fa-solid fa-file-shield"></i>
-                                                <p><strong>Next Step:</strong> You will upload your GSTIN, Business PAN, Bank Details, and ID documents securely to Supabase storage on the next page.</p>
-                                            </div>
-
-                                            <button type="submit" className="seller-btn-primary seller-btn-block">
-                                                Continue to KYC <i className="fa-solid fa-arrow-right" style={{ marginLeft: '8px' }}></i>
-                                            </button>
-                                        </form>
-                                    ) : (
-                                        <form onSubmit={handleRegistration}>
-                                            <div className="form-group">
-                                                <label>Do you have a GSTIN?</label>
-                                                <select name="hasGst" value={formData.hasGst} onChange={handleInputChange} className="input-box" required style={{ width: '100%', padding: '12px', border: '1px solid #d1d5db', borderRadius: '6px' }}>
-                                                    <option value="yes">Yes, I am GST Registered</option>
-                                                    <option value="no">No, I sell Without GST (Unregistered Artisan)</option>
-                                                </select>
-                                            </div>
-
-                                            {formData.hasGst === 'yes' ? (
-                                                <div className="form-grid-row">
-                                                    <div className="form-group">
-                                                        <label>GSTIN Number</label>
-                                                        <input type="text" name="gstNumber" value={formData.gstNumber} onChange={handleInputChange} required placeholder="22AAAAA0000A1Z5" />
-                                                    </div>
-                                                    <div className="form-group">
-                                                        <label>GST Certificate (PDF/IMG)</label>
-                                                        {formData.gstPdfUrl ? (
-                                                            <div style={{ padding: '10px 14px', background: '#e6f4ea', color: '#137333', borderRadius: '8px', fontSize: '13px', border: '1px solid #ceead6' }}><i className="fa-solid fa-check"></i> Uploaded</div>
-                                                        ) : (
-                                                            <input type="file" accept=".pdf,image/*" onChange={(e) => handleSupabaseFileUpload(e, 'gstPdfUrl')} required style={{ padding: '8px' }} />
-                                                        )}
-                                                        {uploadingTarget === 'gstPdfUrl' && <span style={{ fontSize: '11px', color: 'var(--ws-brown)' }}>Uploading to Supabase...</span>}
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div className="form-notice" style={{ background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a', marginBottom: '20px' }}>
-                                                    <i className="fa-solid fa-circle-info"></i>
-                                                    <p><strong>Without GST Mode:</strong> As an unregistered artisan, you will issue a statutory <strong>Bill of Supply</strong> instead of a Tax Invoice. No GST will be collected on your sales.</p>
-                                                </div>
-                                            )}
-
-                                            <div className="form-group">
-                                                <label>Business PAN Number</label>
-                                                <input type="text" name="panNumber" value={formData.panNumber} onChange={handleInputChange} required placeholder="ABCDE1234F" />
-                                            </div>
-
-                                            <div className="form-grid-row">
-                                                <div className="form-group">
-                                                    <label>Bank Account Number</label>
-                                                    <input type="text" name="accountNumber" value={formData.accountNumber} onChange={handleInputChange} required placeholder="000000000000" />
-                                                </div>
-                                                <div className="form-group">
-                                                    <label>Bank IFSC Code</label>
-                                                    <input type="text" name="ifscCode" value={formData.ifscCode} onChange={handleInputChange} required placeholder="SBIN0001234" />
-                                                </div>
-                                            </div>
-
-                                            <div className="form-grid-row">
-                                                <div className="form-group">
-                                                    <label>Cancelled Cheque / Passbook</label>
-                                                    {formData.bankProofUrl ? (
-                                                        <div style={{ padding: '10px 14px', background: '#e6f4ea', color: '#137333', borderRadius: '8px', fontSize: '13px', border: '1px solid #ceead6' }}><i className="fa-solid fa-check"></i> Uploaded</div>
-                                                    ) : (
-                                                        <input type="file" accept="image/*,.pdf" onChange={(e) => handleSupabaseFileUpload(e, 'bankProofUrl')} required style={{ padding: '8px' }} />
-                                                    )}
-                                                    {uploadingTarget === 'bankProofUrl' && <span style={{ fontSize: '11px', color: 'var(--ws-brown)' }}>Uploading to Supabase...</span>}
-                                                </div>
-                                                <div className="form-group">
-                                                    <label>ID Document (Masked)</label>
-                                                    {formData.maskedAadhaarUrl ? (
-                                                        <div style={{ padding: '10px 14px', background: '#e6f4ea', color: '#137333', borderRadius: '8px', fontSize: '13px', border: '1px solid #ceead6' }}><i className="fa-solid fa-check"></i> Uploaded</div>
-                                                    ) : (
-                                                        <input type="file" accept="image/*,.pdf" onChange={(e) => handleSupabaseFileUpload(e, 'maskedAadhaarUrl')} required style={{ padding: '8px' }} />
-                                                    )}
-                                                    {uploadingTarget === 'maskedAadhaarUrl' && <span style={{ fontSize: '11px', color: 'var(--ws-brown)' }}>Uploading to Supabase...</span>}
-                                                </div>
-                                            </div>
-
-                                            <button type="submit" disabled={isSubmitting} className="seller-btn-primary seller-btn-block" style={{ marginTop: '10px' }}>
-                                                {isSubmitting ? 'Saving Application...' : 'Submit Application'}
-                                            </button>
-
-                                            <p className="seller-form-legal">
-                                                <i className="fa-solid fa-lock"></i> All documents are stored securely via Supabase and used solely for platform payout routing and compliance.
-                                            </p>
-                                        </form>
-                                    )}
-                                </div>
-                            </>
-                        ) : (
-                            <div className="success-card">
-                                <div className="success-medallion">
-                                    <i className="fa-solid fa-file-shield" style={{ fontSize: '32px', color: 'var(--ws-brown)' }}></i>
-                                </div>
-                                <h2>KYC Under Review</h2>
-                                <p>Your legal documents and application for <strong>{formData.brandName}</strong> have been safely uploaded and transmitted to our administrative team.</p>
-                                <p style={{ fontSize: '0.85rem', color: 'var(--ws-body)', background: 'var(--ws-muted)', padding: '12px', borderRadius: '8px' }}>
-                                    Verification typically takes 24-48 hours. We will notify you via email once your storefront is ready to go live.
-                                </p>
-                                <button className="seller-btn-ghost" style={{ marginTop: '20px' }} onClick={() => navigate('/')}>
-                                    Return to Home
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
+    const handleRejectApplication = async (appId) => {
+        const reason = window.prompt(
+            "Reason for rejection (the seller will see this).\nExamples: Invalid IFSC code, Blurry GST certificate, PAN does not match name",
+            ""
         );
-    }
+        if (reason === null) return; // cancelled
+        const cleanReason = reason.trim().slice(0, 300);
+        if (cleanReason.length < 3) {
+            alert("Please enter a short reason so the seller knows what to fix.");
+            return;
+        }
+        try {
+            await updateDoc(doc(db, "seller_applications", appId), {
+                status: "rejected",
+                rejectionReason: cleanReason,
+                rejectedAt: serverTimestamp(),
+                reviewedBy: getAuth().currentUser?.email || null
+            });
+            fetchApplications();
+            if (window.showToast) window.showToast("Application rejected. Seller can re-apply after 24 hours.");
+        } catch (error) {
+            console.error("Error rejecting application:", error);
+            alert(`Rejection Failed: ${error.message}`);
+        }
+    };
+
+    // --- Action Handlers: Sellers ---
+    const handleAddSeller = async (e) => {
+        e.preventDefault();
+        const email = newSellerEmail.trim().toLowerCase();
+        if (!email) return;
+
+        setIsAuthorizing(true);
+        try {
+            const headers = typeof getAuthHeaders === 'function' ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
+            await fetch(`${API_BASE_URL}/admin/sellers`, {
+                method: "POST",
+                headers: headers,
+                body: JSON.stringify({ email: email })
+            });
+            if (window.showToast) window.showToast(`${email} has been authorized!`);
+            setNewSellerEmail("");
+            if (typeof loadAuthorizedSellers === 'function') loadAuthorizedSellers(); 
+        } catch(err) {
+            alert("Error authorizing seller: " + err.message);
+        } finally {
+            setIsAuthorizing(false);
+        }
+    };
+
+    const handleRemoveSeller = async (email) => {
+        if (window.confirm(`Are you absolutely sure you want to revoke access for ${email}?`)) {
+            try {
+                const headers = typeof getAuthHeaders === 'function' ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
+                await fetch(`${API_BASE_URL}/admin/sellers/${email}`, { method: "DELETE", headers: headers });
+                if (window.showToast) window.showToast(`Access revoked for ${email}`);
+                if (typeof loadAuthorizedSellers === 'function') loadAuthorizedSellers();
+            } catch(e) {
+                alert("Error removing seller: " + e.message);
+            }
+        }
+    };
+
+    // --- Action Handlers: Modal ---
+    const openSellerDetails = async (seller) => {
+        const myProducts = (liveProducts || []).filter(p => p.sellerEmail === seller.email || p.brandName === seller.profile?.brandName);
+        
+        const myOrders = (orders || []).filter(o => {
+            if (!o.items) return false;
+            return o.items.some(orderItem => {
+                const matchesStamp = (orderItem.sellerEmail && orderItem.sellerEmail === seller.email) || 
+                                     (orderItem.brandName && seller.profile?.brandName && orderItem.brandName === seller.profile?.brandName);
+                const matchesLiveProduct = myProducts.some(myProduct => myProduct.docId === orderItem.id || myProduct.item_id === orderItem.item_id || myProduct.title === orderItem.title);
+                return matchesStamp || matchesLiveProduct;
+            });
+        });
+
+        try {
+            const headers = typeof getAuthHeaders === 'function' ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
+            
+            let fetchedProfile = {};
+            const profileRes = await fetch(`${API_BASE_URL}/admin/seller_profiles/${seller.email}`, { headers });
+            if (profileRes.ok) {
+                fetchedProfile = await profileRes.json();
+            }
+
+            let fetchedPayouts = [];
+            const payoutsRes = await fetch(`${API_BASE_URL}/admin/payouts?email=${seller.email}`, { headers });
+            if (payoutsRes.ok) {
+                fetchedPayouts = await payoutsRes.json();
+            }
+            setSellerPayouts(fetchedPayouts);
+
+            const sellerWithData = { ...seller, products: myProducts, orders: myOrders, profile: fetchedProfile };
+            setSelectedSeller(sellerWithData);
+            setEditProfileData(fetchedProfile); 
+            setSellerModalTab("profile");
+            document.body.style.overflow = "hidden"; 
+
+        } catch(e) {
+            console.error("Error loading complete seller portfolio", e);
+            alert("Failed to load seller data securely. Check connection.");
+        }
+    };
+
+    const closeSellerModal = () => {
+        setSelectedSeller(null);
+        document.body.style.overflow = "auto";
+    };
+
+    const handleProfileChange = (e) => {
+        setEditProfileData({ ...editProfileData, [e.target.name]: e.target.value });
+    };
+
+    const handleSaveSellerProfile = async (e) => {
+        e.preventDefault();
+        setIsSavingProfile(true);
+
+        try {
+            const headers = typeof getAuthHeaders === 'function' ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
+            await fetch(`${API_BASE_URL}/admin/seller_profiles/${selectedSeller.email}`, {
+                method: "PUT",
+                headers: headers,
+                body: JSON.stringify(editProfileData)
+            });
+            
+            setSelectedSeller(prev => ({...prev, profile: editProfileData}));
+            if (window.showToast) window.showToast("Seller Profile Updated Securely!");
+            if (typeof loadAuthorizedSellers === 'function') loadAuthorizedSellers(); 
+        } catch (err) {
+            alert("Error updating profile: " + err.message);
+        } finally {
+            setIsSavingProfile(false);
+        }
+    };
+
+    const handleMarkPayoutPaid = async (payoutId) => {
+        const utr = window.prompt("Enter Bank Transfer UTR/Reference Number:");
+        if (!utr) return;
+
+        try {
+            const headers = typeof getAuthHeaders === 'function' ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
+            await fetch(`${API_BASE_URL}/admin/payouts/${payoutId}`, {
+                method: "PUT",
+                headers: headers,
+                body: JSON.stringify({
+                    status: 'paid',
+                    utr: utr,
+                    paid_at: new Date().toISOString()
+                })
+            });
+            
+            setSellerPayouts(prev => prev.map(p => p.id === payoutId ? { ...p, status: 'paid', utr: utr } : p));
+            if (window.showToast) window.showToast("Payout Marked as Paid Securely!");
+        } catch(e) {
+            alert("Error updating payout: " + e.message);
+        }
+    };
 
     return (
-        <div className="seller-landing-container">
-            <section className="seller-hero">
-                <div className="seller-hero-inner">
-                    <span className="seller-eyebrow seller-eyebrow-light">The marketplace for authentic traditional fashion</span>
-                    <h1>Elevate Your Craft. <br /> Take Your Brand Global.</h1>
-                    <p>
-                        Join Jamba Wear, the premier marketplace for authentic traditional fashion. Reach thousands of customers across India, manage your inventory effortlessly, and grow your business today.
-                    </p>
-                    <div className="seller-hero-actions">
-                        <button onClick={handleSecureAuth} disabled={isLoggingIn} className="seller-btn-primary">
-                            {isLoggingIn ? <><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: '8px' }}></i> Authenticating...</> : "Start Selling Today"}
-                        </button>
-                        
-                        <button onClick={handleSecureAuth} disabled={isLoggingIn} className="seller-btn-ghost">
-                            {isLoggingIn ? <><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: '8px' }}></i> Authenticating...</> : <><i className="fa-brands fa-google" style={{ marginRight: '8px' }}></i> Login to Dashboard</>}
+        <div className="content-section active sellers-container">
+            <span className="section-title" style={{ marginBottom: '16px', display: 'block' }}>Seller Directory</span>
+            
+            {/* 🔥 THREE TABS NAV 🔥 */}
+            <div className="seller-sub-nav">
+                <button 
+                    type="button"
+                    onClick={() => setMainViewTab("directory")}
+                    className={`seller-sub-nav-btn ${mainViewTab === "directory" ? "active" : ""}`}
+                >
+                    <i className="fa-solid fa-address-book"></i> Active Sellers
+                </button>
+                <button 
+                    type="button"
+                    onClick={() => setMainViewTab("onboarding")}
+                    className={`seller-sub-nav-btn ${mainViewTab === "onboarding" ? "active" : ""}`}
+                >
+                    <i className="fa-solid fa-user-clock"></i> Pending Applications
+                    {pendingApplications.length > 0 && (
+                        <span className="seller-badge">
+                            {pendingApplications.length}
+                        </span>
+                    )}
+                </button>
+                <button 
+                    type="button"
+                    onClick={() => setMainViewTab("storefronts")}
+                    className={`seller-sub-nav-btn ${mainViewTab === "storefronts" ? "active" : ""}`}
+                >
+                    <i className="fa-solid fa-store"></i> Live Storefronts
+                </button>
+            </div>
+
+            {/* TAB 1: ACTIVE SELLERS DIRECTORY */}
+            {mainViewTab === "directory" && (
+                <>
+                    <p className="text-helper" style={{ marginBottom: '20px' }}>Only Google Emails added to this list will be allowed to log into the JAMBAWEAR Seller Portal.</p>
+
+                    <form className="card" style={{ marginBottom: '24px' }} onSubmit={handleAddSeller}>
+                        <span className="section-subtitle">Authorize New Partner</span>
+                        <div className="field-grid" style={{ alignItems: 'end' }}>
+                            <div className="form-group" style={{ margin: 0, flex: 1 }}>
+                                <span className="label">Partner's Google Email</span>
+                                <input 
+                                    type="email" 
+                                    className="input-box" 
+                                    placeholder="e.g. bodo.weavers@gmail.com" 
+                                    value={newSellerEmail}
+                                    onChange={(e) => setNewSellerEmail(e.target.value)}
+                                    required 
+                                />
+                            </div>
+                            <button type="submit" disabled={isAuthorizing} className="btn-submit" style={{ width: 'auto', padding: '10px 24px', margin: 0 }}>
+                                {isAuthorizing ? <><i className="fa-solid fa-spinner fa-spin"></i> Authorizing...</> : "Authorize Partner"}
+                            </button>
+                        </div>
+                    </form>
+
+                    <span className="section-subtitle">Currently Authorized Sellers</span>
+                    <div style={{ marginTop: '16px' }}>
+                        {globalSellers.length === 0 ? (
+                            <p style={{ padding: '20px', fontWeight: '500', color: 'var(--text-muted)' }}>No sellers currently authorized.</p>
+                        ) : (
+                            globalSellers.map(seller => {
+                                const brandName = seller.profile?.brandName || "Profile Not Setup";
+                                const sellerName = seller.profile?.sellerName || "Unknown Owner";
+
+                                return (
+                                    <div key={seller.email} className="seller-list-item">
+                                        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                                            <div className="seller-avatar-wrapper">
+                                                {seller.profile?.profilePhoto ? (
+                                                    <img src={seller.profile.profilePhoto} loading="lazy" alt="Avatar" />
+                                                ) : (
+                                                    brandName.charAt(0).toUpperCase()
+                                                )}
+                                            </div>
+                                            <div className="seller-info-block">
+                                                <strong>{brandName}</strong><br/>
+                                                <span className="seller-info-meta">
+                                                    <i className="fa-solid fa-user"></i> {sellerName} &nbsp;|&nbsp; 
+                                                    <i className="fa-solid fa-envelope" style={{marginLeft: '6px'}}></i> {seller.email}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="seller-action-group">
+                                            <button type="button" className="action-btn btn-status-active" onClick={() => openSellerDetails(seller)}>
+                                                <i className="fa-solid fa-folder-open"></i> Manage Store
+                                            </button>
+                                            <button type="button" className="action-btn" style={{color: 'var(--danger)', borderColor: 'var(--danger-light)'}} onClick={() => handleRemoveSeller(seller.email)}>
+                                                <i className="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </>
+            )}
+
+            {/* 🔥 TAB 2: PENDING ONBOARDING QUEUE (UPDATED UI) 🔥 */}
+            {mainViewTab === "onboarding" && (
+                <div className="card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <div>
+                            <span className="section-subtitle" style={{ margin: 0, padding: 0 }}>Merchant Onboarding Requests</span>
+                            <p className="text-helper" style={{ margin: '4px 0 0 0' }}>Review submitted seller details, verify documents, and approve applications.</p>
+                        </div>
+                        <button type="button" onClick={fetchApplications} className="btn-submit" style={{ padding: '8px 16px', width: 'auto', margin: 0, backgroundColor: '#f3f4f6', color: '#111', border: '1px solid #d1d5db' }}>
+                            <i className="fa-solid fa-rotate-right"></i> Refresh
                         </button>
                     </div>
+                    
+                    {isLoadingApplications ? (
+                        <p style={{ color: 'var(--text-muted)', padding: '20px 0' }}>Loading applications...</p>
+                    ) : pendingApplications.length === 0 ? (
+                        <div style={{ padding: '40px', textAlign: 'center', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px dashed #d1d5db' }}>
+                            <p style={{ color: '#6b7280', margin: 0 }}>No pending merchant applications right now.</p>
+                        </div>
+                    ) : (
+                        <div className="onboarding-table-wrapper" style={{ overflowX: 'auto' }}>
+                            <table className="onboarding-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                <thead>
+                                    <tr style={{ background: '#f9fafb', color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
+                                        <th style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb' }}>Brand & Contact</th>
+                                        <th style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb' }}>GST Status</th>
+                                        <th style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb' }}>Banking & Identity</th>
+                                        <th style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb' }}>Legal Documents</th>
+                                        <th style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {pendingApplications.map(app => (
+                                        <tr key={app.id} style={{ borderBottom: '1px solid #e5e7eb', fontSize: '14px' }}>
+                                            {/* 1. Brand & Contact */}
+                                            <td style={{ padding: '16px' }}>
+                                                <div style={{ fontWeight: '700', color: '#111827', fontSize: '15px' }}>{app.brandName}</div>
+                                                <div style={{ color: '#4b5563', fontSize: '13px', marginBottom: '6px' }}>{app.ownerName}</div>
+                                                <div style={{ color: '#6b7280', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                                                    <i className="fa-solid fa-envelope"></i> {app.email}
+                                                </div>
+                                                <div style={{ color: '#6b7280', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <i className="fa-solid fa-phone"></i> {app.phone}
+                                                </div>
+                                            </td>
 
-                    <div style={{ marginTop: '20px' }}>
-                        <button 
-                            onClick={() => navigate('/super-admin')} 
-                            style={{ 
-                                background: 'transparent', 
-                                border: 'none', 
-                                color: 'var(--ws-brown)', 
-                                fontSize: '13px', 
-                                cursor: 'pointer', 
-                                textDecoration: 'underline',
-                                fontWeight: '500',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px'
-                            }}
-                        >
-                            <i className="fa-solid fa-lock"></i> System Admin Login
-                        </button>
-                    </div>
+                                            {/* 2. GST Status */}
+                                            <td style={{ padding: '16px' }}>
+                                                <span style={{ 
+                                                    background: app.kycData?.hasGst ? '#dcfce7' : '#fef3c7', 
+                                                    color: app.kycData?.hasGst ? '#166534' : '#92400e', 
+                                                    padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '700', display: 'inline-block', marginBottom: '8px'
+                                                }}>
+                                                    {app.kycData?.hasGst ? 'GST Registered' : 'Without GST'}
+                                                </span>
+                                                <div style={{ fontSize: '12px', color: '#374151' }}>
+                                                    <strong>GSTIN:</strong><br/>
+                                                    <span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{app.kycData?.gstNumber || 'N/A'}</span>
+                                                </div>
+                                            </td>
 
-                    {loginError && (
-                        <div style={{ color: '#b4544a', fontSize: '14px', marginTop: '20px', fontWeight: '500', background: '#faf0ed', padding: '10px 16px', borderRadius: '8px', display: 'inline-block' }}>
-                            <i className="fa-solid fa-circle-exclamation"></i> {loginError}
+                                            {/* 3. Banking & PAN */}
+                                            <td style={{ padding: '16px', fontSize: '13px', color: '#374151', lineHeight: '1.6' }}>
+                                                <div><strong style={{ color: '#111827' }}>PAN:</strong> {app.kycData?.panNumber || 'N/A'}</div>
+                                                <div><strong style={{ color: '#111827' }}>A/C:</strong> {app.kycData?.accountNumber || 'N/A'}</div>
+                                                <div><strong style={{ color: '#111827' }}>IFSC:</strong> {app.kycData?.ifscCode || 'N/A'}</div>
+                                            </td>
+
+                                            {/* 4. Document Links */}
+                                            <td style={{ padding: '16px' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    {app.kycData?.gstPdfUrl && (
+                                                        <a href={app.kycData.gstPdfUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', textDecoration: 'none', color: '#2563eb', display: 'flex', alignItems: 'center', gap: '6px', background: '#eff6ff', padding: '6px 10px', borderRadius: '6px' }}>
+                                                            <i className="fa-solid fa-file-pdf"></i> GST Certificate
+                                                        </a>
+                                                    )}
+                                                    {app.kycData?.bankProofUrl && (
+                                                        <a href={app.kycData.bankProofUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', textDecoration: 'none', color: '#059669', display: 'flex', alignItems: 'center', gap: '6px', background: '#ecfdf5', padding: '6px 10px', borderRadius: '6px' }}>
+                                                            <i className="fa-solid fa-image"></i> Bank Proof
+                                                        </a>
+                                                    )}
+                                                    {app.kycData?.maskedAadhaarUrl && (
+                                                        <a href={app.kycData.maskedAadhaarUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', textDecoration: 'none', color: '#7c3aed', display: 'flex', alignItems: 'center', gap: '6px', background: '#f5f3ff', padding: '6px 10px', borderRadius: '6px' }}>
+                                                            <i className="fa-solid fa-id-card"></i> ID Document
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </td>
+
+                                            {/* 5. Actions */}
+                                            <td style={{ padding: '16px', verticalAlign: 'middle', textAlign: 'right' }}>
+                                                <button onClick={() => handleApproveApplication(app)} style={{ background: '#10b981', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', width: '100%', marginBottom: '8px', display: 'flex', justifyContent: 'center', gap: '6px', alignItems: 'center' }}>
+                                                    <i className="fa-solid fa-check"></i> Approve
+                                                </button>
+                                                <button onClick={() => handleRejectApplication(app.id)} style={{ background: '#fff', color: '#ef4444', border: '1px solid #f87171', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', width: '100%', display: 'flex', justifyContent: 'center', gap: '6px', alignItems: 'center' }}>
+                                                    <i className="fa-solid fa-xmark"></i> Reject
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     )}
+                </div>
+            )}
 
-                    <div className="seller-trust-strip">
-                        <div className="trust-item">
-                            <strong>2,400+</strong>
-                            <span>Artisan sellers</span>
+            {/* TAB 3: LIVE STOREFRONTS MONITORING */}
+            {mainViewTab === "storefronts" && (
+                <div className="card" style={{ padding: editingSellerEmail ? '0' : '28px', background: editingSellerEmail ? 'transparent' : 'var(--ws-cream)', border: editingSellerEmail ? 'none' : '1px solid var(--ws-line)', boxShadow: editingSellerEmail ? 'none' : 'var(--ws-shadow)' }}>
+                    
+                    {editingSellerEmail ? (
+                        <SellerStorefrontEditor 
+                            adminSellerEmail={editingSellerEmail} 
+                            onBackToAdmin={() => setEditingSellerEmail(null)} 
+                            getAuthHeaders={getAuthHeaders} 
+                        />
+                    ) : (
+                        <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                <div>
+                                    <span className="section-subtitle" style={{ margin: 0, padding: 0 }}>Live Storefronts</span>
+                                    <p className="text-helper" style={{ margin: '4px 0 0 0' }}>Monitor and manage custom vanity stores created by sellers.</p>
+                                </div>
+                                <button type="button" onClick={fetchStorefronts} className="btn-submit" style={{ padding: '8px 16px', width: 'auto', margin: 0, backgroundColor: '#f3f4f6', color: '#111', border: '1px solid #d1d5db' }}>
+                                    <i className="fa-solid fa-rotate-right"></i> Refresh
+                                </button>
+                            </div>
+
+                            {isLoadingStorefronts ? (
+                                <p style={{ color: 'var(--ws-body)', padding: '20px 0', textAlign: 'center' }}><i className="fa-solid fa-spinner fa-spin"></i> Loading stores...</p>
+                            ) : (
+                                <div className="onboarding-table-wrapper">
+                                    <table className="onboarding-table" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+                                        <thead>
+                                            <tr>
+                                                <th style={{ padding: '13px 18px', background: 'var(--ws-muted)', borderBottom: '1px solid var(--ws-line)', fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--ws-brown)' }}>Brand</th>
+                                                <th style={{ padding: '13px 18px', background: 'var(--ws-muted)', borderBottom: '1px solid var(--ws-line)', fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--ws-brown)' }}>URL Handle</th>
+                                                <th style={{ padding: '13px 18px', background: 'var(--ws-muted)', borderBottom: '1px solid var(--ws-line)', fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--ws-brown)' }}>Status</th>
+                                                <th style={{ padding: '13px 18px', background: 'var(--ws-muted)', borderBottom: '1px solid var(--ws-line)', fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--ws-brown)', textAlign: 'right' }}>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {storefronts.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan="4" style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>No custom storefronts published yet.</td>
+                                                </tr>
+                                            ) : (
+                                                storefronts.map((store, idx) => (
+                                                    <tr key={idx} style={{ background: store.isSuspended ? 'var(--ws-danger-soft)' : 'transparent' }}>
+                                                        <td style={{ padding: '16px 18px', borderBottom: '1px solid var(--ws-line)' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--ws-sand)', overflow: 'hidden', border: '1px solid var(--ws-line)', flexShrink: 0 }}>
+                                                                    {store.brandLogo ? <img src={store.brandLogo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
+                                                                </div>
+                                                                <div>
+                                                                    <strong style={{ color: 'var(--ws-ink)', fontSize: '14px' }}>{store.brandName || 'Unnamed Brand'}</strong>
+                                                                    <div style={{ fontSize: '12px', color: 'var(--ws-body)', marginTop: '2px' }}>{store.sellerEmail}</div>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td style={{ padding: '16px 18px', borderBottom: '1px solid var(--ws-line)', verticalAlign: 'middle' }}>
+                                                            <span style={{ background: 'var(--ws-sand)', color: 'var(--ws-ink)', padding: '4px 8px', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px', border: '1px solid var(--ws-line)' }}>
+                                                                {store.vanityHandle ? `/shop/${store.vanityHandle}` : 'Not Set'}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ padding: '16px 18px', borderBottom: '1px solid var(--ws-line)', verticalAlign: 'middle' }}>
+                                                            <span style={{ background: store.isSuspended ? 'var(--ws-danger-soft)' : '#dcfce7', color: store.isSuspended ? 'var(--ws-danger)' : '#166534', padding: '4px 10px', borderRadius: '999px', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase' }}>
+                                                                {store.isSuspended ? 'Suspended' : 'Live'}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ padding: '16px 18px', borderBottom: '1px solid var(--ws-line)', verticalAlign: 'middle', textAlign: 'right' }}>
+                                                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                                                {store.vanityHandle && (
+                                                                    <a href={`/shop/${store.vanityHandle}`} target="_blank" rel="noopener noreferrer" title="View Live Store" style={{ background: 'var(--ws-cream)', color: 'var(--ws-ink)', padding: '6px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', textDecoration: 'none', border: '1px solid var(--ws-line)' }}>
+                                                                        <i className="fa-solid fa-eye"></i>
+                                                                    </a>
+                                                                )}
+                                                                <button 
+                                                                    onClick={() => toggleStoreSuspension(store.sellerEmail, store.isSuspended)}
+                                                                    title={store.isSuspended ? 'Re-enable Storefront' : 'Suspend Storefront'}
+                                                                    style={{ background: store.isSuspended ? '#dcfce7' : 'var(--ws-danger-soft)', color: store.isSuspended ? '#16a34a' : 'var(--ws-danger)', padding: '6px 10px', borderRadius: '6px', fontSize: '12px', border: 'none', cursor: 'pointer' }}
+                                                                >
+                                                                    {store.isSuspended ? <i className="fa-solid fa-check"></i> : <i className="fa-solid fa-ban"></i>}
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => setEditingSellerEmail(store.sellerEmail)}
+                                                                    title="Edit Store Layout"
+                                                                    style={{ background: 'var(--ws-ink)', color: 'var(--ws-cream)', padding: '6px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                                                >
+                                                                    <i className="fa-solid fa-pen-to-square"></i> Edit
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+            )}
+
+            {/* SELLER MODAL OVERLAY */}
+            {selectedSeller && (
+                <div className="admin-modal-overlay" onClick={closeSellerModal}>
+                    <div className="admin-modal-content" onClick={(e) => e.stopPropagation()}>
+                        
+                        <div className="admin-modal-header">
+                            <h2>
+                                {selectedSeller.profile?.profilePhoto && <img src={selectedSeller.profile.profilePhoto} alt="Avatar" style={{width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', marginRight: '10px'}} />}
+                                {selectedSeller.profile?.brandName || selectedSeller.email}
+                            </h2>
+                            <button type="button" className="btn-close-modal" onClick={closeSellerModal}>Close Panel</button>
                         </div>
-                        <div className="trust-divider" />
-                        <div className="trust-item">
-                            <strong>28 States</strong>
-                            <span>Nationwide delivery</span>
+
+                        <div className="admin-modal-tabs">
+                            <button type="button" className={`admin-modal-tab ${sellerModalTab === 'profile' ? 'active' : ''}`} onClick={() => setSellerModalTab('profile')}>Store Profile</button>
+                            <button type="button" className={`admin-modal-tab ${sellerModalTab === 'catalog' ? 'active' : ''}`} onClick={() => setSellerModalTab('catalog')}>Catalog & Stock ({selectedSeller.products.length})</button>
+                            <button type="button" className={`admin-modal-tab ${sellerModalTab === 'orders' ? 'active' : ''}`} onClick={() => setSellerModalTab('orders')}>Orders ({selectedSeller.orders.length})</button>
+                            <button type="button" className={`admin-modal-tab ${sellerModalTab === 'finance' ? 'active' : ''}`} onClick={() => setSellerModalTab('finance')}>
+                                Financials & Payouts
+                                {sellerPayouts.filter(p => p.status === 'pending').length > 0 && (
+                                    <span className="tab-badge">{sellerPayouts.filter(p => p.status === 'pending').length}</span>
+                                )}
+                            </button>
                         </div>
-                        <div className="trust-divider" />
-                        <div className="trust-item">
-                            <strong>Weekly</strong>
-                            <span>Automated payouts</span>
+
+                        <div className="admin-modal-body">
+                            
+                            {/* TAB 1: EDIT PROFILE */}
+                            {sellerModalTab === 'profile' && (
+                                <form onSubmit={handleSaveSellerProfile}>
+                                    <div className="field-grid">
+                                        <div className="form-group"><span className="label">Brand Name</span><input type="text" name="brandName" value={editProfileData.brandName || ""} onChange={handleProfileChange} className="input-box" required /></div>
+                                        <div className="form-group"><span className="label">Owner Name</span><input type="text" name="sellerName" value={editProfileData.sellerName || ""} onChange={handleProfileChange} className="input-box" required /></div>
+                                    </div>
+                                    <div className="field-grid">
+                                        <div className="form-group"><span className="label">Contact Email</span><input type="email" name="storeEmail" value={editProfileData.storeEmail || selectedSeller.email} onChange={handleProfileChange} className="input-box" required /></div>
+                                        <div className="form-group"><span className="label">Contact Phone</span><input type="text" name="primaryPhone" value={editProfileData.primaryPhone || ""} onChange={handleProfileChange} className="input-box" required /></div>
+                                    </div>
+                                    
+                                    <span className="section-subtitle" style={{marginTop: '20px'}}>Bank Details</span>
+                                    <div className="field-grid">
+                                        <div className="form-group"><span className="label">Account Name</span><input type="text" name="accName" value={editProfileData.accName || ""} onChange={handleProfileChange} className="input-box" required /></div>
+                                        <div className="form-group"><span className="label">Account Number</span><input type="text" name="accNumber" value={editProfileData.accNumber || ""} onChange={handleProfileChange} className="input-box" required /></div>
+                                        <div className="form-group"><span className="label">IFSC Code</span><input type="text" name="ifsc" value={editProfileData.ifsc || ""} onChange={handleProfileChange} className="input-box" required /></div>
+                                    </div>
+
+                                    <button type="submit" disabled={isSavingProfile} className="btn-submit" style={{width: 'auto', padding: '10px 24px'}}>
+                                        {isSavingProfile ? "Saving..." : "Save Changes"}
+                                    </button>
+                                </form>
+                            )}
+
+                            {/* TAB 2: CATALOG */}
+                            {sellerModalTab === 'catalog' && (
+                                <div>
+                                    {selectedSeller.products.length === 0 ? <p style={{color: 'var(--text-muted)'}}>No products uploaded by this seller.</p> : null}
+                                    {selectedSeller.products.map(p => (
+                                        <div key={p.docId || p.id} style={{ display: 'flex', gap: '16px', padding: '16px', borderBottom: '1px solid #eee' }}>
+                                            <img src={p.images?.[0] || 'https://via.placeholder.com/80'} loading="lazy" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: '6px' }} alt="Product" />
+                                            <div>
+                                                <strong style={{fontSize: '15px', color: 'var(--primary)'}}>{p.title}</strong>
+                                                <div style={{fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px'}}>
+                                                    Price: ₹{p.selling_price} | Stock: <strong>{p.stock || 0}</strong> | Status: {p.approval_status === 'pending' ? '⚠️ Pending' : '✅ Live'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* TAB 3: ORDERS */}
+                            {sellerModalTab === 'orders' && (
+                                <div>
+                                    {selectedSeller.orders.length === 0 ? <p style={{color: 'var(--text-muted)'}}>No orders to fulfill yet.</p> : null}
+                                    {selectedSeller.orders.map(o => (
+                                        <div key={o.id} style={{ padding: '16px', borderBottom: '1px solid #eee' }}>
+                                            <strong style={{color: 'var(--primary)'}}>Order Ref: {o.id}</strong>
+                                            <div style={{fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px'}}>
+                                                Status: <span style={{textTransform: 'uppercase', color: 'var(--primary)'}}>{o.status || 'Pending'}</span> | 
+                                                Seller Accepted: {o.seller_accepted ? '✅ Yes' : '⏳ Waiting'}
+                                            </div>
+                                            {o.trackingId && <div style={{fontSize: '12px', marginTop: '6px', background: '#f9fafb', padding: '8px'}}>Tracking: {o.trackingId} ({o.courierName})</div>}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* TAB 4: FINANCIALS */}
+                            {sellerModalTab === 'finance' && (
+                                <div>
+                                    <div className="finance-summary-cards">
+                                        <div className="finance-card pending">
+                                            <div className="finance-card-title">Pending Payout Requests</div>
+                                            <div className="finance-card-value">{sellerPayouts.filter(p => p.status === 'pending').length}</div>
+                                        </div>
+                                        <div className="finance-card paid">
+                                            <div className="finance-card-title">Total Paid Payouts</div>
+                                            <div className="finance-card-value">{sellerPayouts.filter(p => p.status === 'paid').length}</div>
+                                        </div>
+                                    </div>
+
+                                    <table className="payout-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Date</th>
+                                                <th>Amount</th>
+                                                <th>Status</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {sellerPayouts.map(p => (
+                                                <tr key={p.id}>
+                                                    <td>{new Date(p.date).toLocaleDateString()}</td>
+                                                    <td style={{ fontWeight: 'bold', color: 'var(--primary)' }}>₹{p.amount}</td>
+                                                    <td>
+                                                        {p.status === 'paid' ? <span style={{color: 'var(--success)'}}>Paid ({p.utr})</span> : <span style={{color: 'var(--accent)'}}>Pending</span>}
+                                                    </td>
+                                                    <td>
+                                                        {p.status === 'pending' && (
+                                                            <button type="button" onClick={() => handleMarkPayoutPaid(p.id)} style={{background: 'var(--primary)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer'}}>Mark Paid</button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {sellerPayouts.length === 0 && <tr><td colSpan="4" style={{padding: '16px 8px', color: 'var(--text-muted)'}}>No payout requests found.</td></tr>}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
-            </section>
+            )}
         </div>
     );
 }

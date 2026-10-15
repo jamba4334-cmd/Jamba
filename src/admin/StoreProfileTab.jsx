@@ -137,27 +137,18 @@ export default function StoreProfileTab({
                         <div className="form-group"><span className="label">Pincode</span><input type="text" id="pickup-pincode" defaultValue={sellerProfile.pickupPincode || ""} className="input-box" required minLength="6" maxLength="6" disabled={sameAsPermanent} /></div>
                     </div>
 
-                    {/* 🔥 FIXED: KYC Bank Details Lock */}
-                    <span className="section-subtitle" style={{ color: 'var(--success)', marginTop: '30px' }}>
-                        <i className="fa-solid fa-building-columns"></i> Financial Details 
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'normal', marginLeft: '8px' }}>
-                            (Verified via KYC)
-                        </span>
-                    </span>
-                    
-                    <div style={{ background: '#f9fafb', padding: '20px', borderRadius: '8px', border: '1px solid #e5e7eb', marginBottom: '10px' }}>
-                        <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                            <i className="fa-solid fa-lock" style={{ color: 'var(--text-muted)' }}></i> 
-                            To prevent fraud, payout details are locked after KYC approval. Contact support to update them.
-                        </div>
-                        <div className="field-grid">
-                            <div className="form-group"><span className="label">Bank Name</span><input type="text" defaultValue={sellerProfile.bankName || ""} className="input-box" disabled /></div>
-                            <div className="form-group"><span className="label">Account Holder Name</span><input type="text" defaultValue={sellerProfile.accName || ""} className="input-box" disabled /></div>
-                        </div>
-                        <div className="field-grid">
-                            <div className="form-group"><span className="label">Account Number</span><input type="text" defaultValue={sellerProfile.accNumber || ""} className="input-box" disabled /></div>
-                            <div className="form-group"><span className="label">IFSC Code</span><input type="text" defaultValue={sellerProfile.ifsc || ""} className="input-box" disabled /></div>
-                        </div>
+                    <span className="section-subtitle" style={{ color: 'var(--success)', marginTop: '30px' }}><i className="fa-solid fa-building-columns"></i> Financial Details</span>
+                    <div className="field-grid">
+                        <div className="form-group"><span className="label">Bank Name</span><input type="text" id="bank-name" defaultValue={sellerProfile.bankName || ""} className="input-box" required /></div>
+                        <div className="form-group"><span className="label">Account Holder Name</span><input type="text" id="bank-acc-name" defaultValue={sellerProfile.accName || ""} className="input-box" required /></div>
+                    </div>
+                    <div className="field-grid">
+                        <div className="form-group"><span className="label">Account Number</span><input type="text" id="bank-acc-num" defaultValue={sellerProfile.accNumber || ""} className="input-box" required /></div>
+                        <div className="form-group"><span className="label" style={{ color: 'var(--danger)' }}>Confirm Account Number</span><input type="text" id="bank-acc-num-confirm" defaultValue={sellerProfile.accNumber || ""} className="input-box" style={{ borderColor: '#fca5a5' }} required /></div>
+                    </div>
+                    <div className="field-grid">
+                        <div className="form-group"><span className="label">IFSC Code</span><input type="text" id="bank-ifsc" defaultValue={sellerProfile.ifsc || ""} className="input-box" required /></div>
+                        <div className="form-group"><span className="label" style={{ color: 'var(--danger)' }}>Confirm IFSC Code</span><input type="text" id="bank-ifsc-confirm" defaultValue={sellerProfile.ifsc || ""} className="input-box" style={{ borderColor: '#fca5a5' }} required /></div>
                     </div>
 
                     <button type="submit" id="save-profile-btn" className="btn-submit" style={{ marginTop: '30px' }}>Save Profile Details</button>
@@ -200,7 +191,7 @@ export default function StoreProfileTab({
                         </div>
                     </div>
                     <div className="profile-data-block">
-                        <div className="profile-data-label"><i className="fa-solid fa-building-columns"></i> Banking Info <i className="fa-solid fa-circle-check" style={{color: 'var(--success)', marginLeft: '4px'}}></i></div>
+                        <div className="profile-data-label"><i className="fa-solid fa-building-columns"></i> Banking Info</div>
                         <div className="profile-data-content">
                             <strong>Bank:</strong> {sellerProfile.bankName}<br/>
                             <strong>Holder:</strong> {sellerProfile.accName}<br/>

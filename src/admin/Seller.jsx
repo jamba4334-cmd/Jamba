@@ -17,9 +17,11 @@ import MessagesTab from "./MessagesTab";
 import SellerFooter from "./SellerFooter";
 import SellerPromoTab from "./SellerPromoTab"; 
 
+// 🔥 NEW: Import the Storefront and Subscription Tabs
 import SellerSubscription from "./SellerSubscription";
 import SellerStorefrontEditor from "./SellerStorefrontEditor";
 
+// SECURED: Firebase Initialization using .env
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY, 
     authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -114,20 +116,18 @@ export default function SellerDashboard() {
             if (user) {
                 setSellerEmail(user.email);
                 try {
-                    const docRef = doc(db, "authorized_sellers", user.email.toLowerCase());
+                    const docRef = doc(db, "authorized_sellers", user.email);
                     const docSnap = await getDoc(docRef);
                     if (!docSnap.exists()) {
-                        await signOut(auth);
-                        setAuthError("Unauthorized: Email not registered.");
-                        setShowLoginOverlay(true);
-                        setIsCheckingAuth(false);
-                        return; 
+                        // Not approved yet: send them to onboarding, which shows
+                        // the application form, "under review", or the rejection notice.
+                        window.location.replace('/sell-with-us');
+                        return;
                     }
                     setAuthError("");
                     setShowLoginOverlay(false);
                     
-                    // 🔥 FIXED: Reading profile using lowercase email
-                    const profileRef = doc(db, "seller_profiles", user.email.toLowerCase());
+                    const profileRef = doc(db, "seller_profiles", user.email);
                     const profileSnap = await getDoc(profileRef);
                     let currentProfileData = {}; 
 
@@ -153,7 +153,11 @@ export default function SellerDashboard() {
                     setIsCheckingAuth(false);
                 } catch (err) {
                     console.error("Verification failed", err);
-                    setAuthError("Verification failed. Check Firebase Rules.");
+                    if (err && err.code === "permission-denied") {
+                        setAuthError("Verification was blocked by database permissions. Please contact support — this is a configuration issue, not a problem with your account.");
+                    } else {
+                        setAuthError("Verification failed due to a network or server issue. Please try again in a moment.");
+                    }
                     setShowLoginOverlay(true);
                     setIsCheckingAuth(false);
                 }
@@ -708,7 +712,7 @@ export default function SellerDashboard() {
         btn.innerText = 'Saving...';
 
         const profileData = {
-            email: sellerEmail.toLowerCase(), // 🔥 FIXED: Guarantee lowercase consistency
+            email: sellerEmail,
             profilePhoto: tempProfilePhoto,
             brandName: document.getElementById('prof-brand-name').value,
             sellerName: document.getElementById('prof-seller-name').value,
@@ -734,8 +738,7 @@ export default function SellerDashboard() {
         };
 
         try {
-            // 🔥 FIXED: Storing document using lowercase email
-            await setDoc(doc(db, "seller_profiles", sellerEmail.toLowerCase()), profileData);
+            await setDoc(doc(db, "seller_profiles", sellerEmail), profileData);
             setSellerProfile(profileData); 
             setIsProfileEditing(false); 
             if(window.showToast) window.showToast("Store Profile Saved!");
@@ -812,6 +815,7 @@ export default function SellerDashboard() {
                     <li className={`nav-item ${activeTab === 'add-product' ? 'active' : ''}`} onClick={() => setActiveTab('add-product')}><i className="fa-solid fa-plus"></i> Submit Product</li>
                     <li className={`nav-item ${activeTab === 'payouts' ? 'active' : ''}`} onClick={() => setActiveTab('payouts')}><i className="fa-solid fa-wallet"></i> Earnings & Payouts</li>
                     
+                    {/* 🔥 NEW: Storefront and Subscription Tabs */}
                     <li className={`nav-item ${activeTab === 'storefront' ? 'active' : ''}`} onClick={() => setActiveTab('storefront')}><i className="fa-solid fa-palette"></i> Storefront Editor</li>
                     <li className={`nav-item ${activeTab === 'subscription' ? 'active' : ''}`} onClick={() => setActiveTab('subscription')}><i className="fa-solid fa-crown"></i> Subscriptions</li>
 
@@ -848,6 +852,7 @@ export default function SellerDashboard() {
 
                 {activeTab === 'promos' && <SellerPromoTab getAuthHeaders={getAuthHeaders} />}
                 
+                {/* 🔥 FIXED: Now passing getAuthHeaders and sellerEmail into the Storefront component */}
                 {activeTab === 'storefront' && <SellerStorefrontEditor getAuthHeaders={getAuthHeaders} sellerEmail={sellerEmail} />}
 
                 {activeTab === 'subscription' && <SellerSubscription />}
