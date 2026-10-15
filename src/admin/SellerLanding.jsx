@@ -2,10 +2,15 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './SellerLanding.css';
 
-// Firebase Imports
 import { db } from '../firebase'; 
 import { setDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { createClient } from '@supabase/supabase-js';
+
+// Safe initialization prevents module crashes if .env keys are missing
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 // Supabase Import
 import { createClient } from '@supabase/supabase-js';
@@ -19,13 +24,16 @@ export default function SellerLanding() {
     const navigate = useNavigate();
 
     const [showForm, setShowForm] = useState(false);
+<<<<<<< HEAD
     const [formStep, setFormStep] = useState(1); // 1 = Basic Info, 2 = KYC Uploads
+=======
+    const [formStep, setFormStep] = useState(1); 
+>>>>>>> bc9902d7fa589a8f5a74a24877e576adea882ce2
     
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [registrationSuccess, setRegistrationSuccess] = useState(false);
     const [uploadingTarget, setUploadingTarget] = useState(null);
     
-    // Auth & Form Errors
     const [authError, setAuthError] = useState("");
     const [isLoggingIn, setIsLoggingIn] = useState(false);
     const [loginError, setLoginError] = useState("");
@@ -33,10 +41,14 @@ export default function SellerLanding() {
     const [formData, setFormData] = useState({
         ownerName: '',
         brandName: '',
-        email: '',
+        email: '', // Will be strictly populated by Google Auth
         phone: '',
         whatsapp: '',
+<<<<<<< HEAD
         // KYC Fields
+=======
+        hasGst: 'yes',
+>>>>>>> bc9902d7fa589a8f5a74a24877e576adea882ce2
         gstNumber: '',
         panNumber: '',
         accountNumber: '',
@@ -54,6 +66,7 @@ export default function SellerLanding() {
     const handleNextStep = (e) => {
         e.preventDefault(); 
         setFormStep(2);
+<<<<<<< HEAD
     };
 
     // 🔥 SUPABASE KYC FILE UPLOAD HANDLER
@@ -145,10 +158,12 @@ export default function SellerLanding() {
             setIsSubmitting(false);
             setAuthError(error?.message || "Something went wrong while connecting to the database.");
         }
+=======
+>>>>>>> bc9902d7fa589a8f5a74a24877e576adea882ce2
     };
 
-    // 🔥 SMART SELLER LOGIN LOGIC
-    const handleSellerLogin = async () => {
+    // 🔥 SECURE ONBOARDING PIPELINE
+    const handleSecureAuth = async () => {
         setIsLoggingIn(true);
         setLoginError("");
         const auth = getAuth();
@@ -158,11 +173,15 @@ export default function SellerLanding() {
             const result = await signInWithPopup(auth, provider);
             const userEmail = result.user.email.toLowerCase();
 
+<<<<<<< HEAD
+=======
+            // 1. Check if already an authorized active seller
+>>>>>>> bc9902d7fa589a8f5a74a24877e576adea882ce2
             const approvedRef = doc(db, "authorized_sellers", userEmail);
             const approvedSnap = await getDoc(approvedRef);
-
             if (approvedSnap.exists()) {
                 navigate('/seller'); 
+<<<<<<< HEAD
             } else {
                 const appRef = doc(db, "seller_applications", userEmail);
                 const appSnap = await getDoc(appRef);
@@ -175,13 +194,127 @@ export default function SellerLanding() {
                 } else {
                     await auth.signOut(); 
                     setLoginError("No seller account found for this email. Please register below.");
+=======
+                return;
+            }
+
+            // 2. Check if application is already pending
+            const appRef = doc(db, "seller_applications", userEmail);
+            const appSnap = await getDoc(appRef);
+            if (appSnap.exists()) {
+                const appData = appSnap.data();
+                if (appData.status === "kyc_submitted" || appData.status === "pending_kyc") {
+                    navigate('/seller/kyc'); 
+                    return;
+>>>>>>> bc9902d7fa589a8f5a74a24877e576adea882ce2
                 }
             }
+
+            // 3. New Application: Lock in their verified Google email and show form
+            setFormData(prev => ({ ...prev, email: userEmail }));
+            setShowForm(true);
+
         } catch (error) {
-            console.error(error);
-            setLoginError("Authentication failed. Please try again.");
+            console.error("Auth Error:", error);
+            setLoginError("Google Sign-In failed or was blocked. Verification is required.");
         } finally {
             setIsLoggingIn(false);
+        }
+    };
+
+    const handleSupabaseFileUpload = async (e, fieldName) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        if (!formData.email) {
+            alert("Security Error: Verified email is missing.");
+            return;
+        }
+        if (!supabase) {
+            alert("Configuration Error: Supabase connection keys are missing in the .env file.");
+            return;
+        }
+
+        setUploadingTarget(fieldName);
+        try {
+            const fileExt = file.name.split('.').pop();
+            const safeEmail = formData.email.toLowerCase().replace(/[^a-z0-9]/g, '_');
+            const fileName = `${safeEmail}_${fieldName}_${Date.now()}.${fileExt}`;
+            const filePath = `${fileName}`;
+
+            const { data, error } = await supabase.storage
+                .from('kyc-documents')
+                .upload(filePath, file, { cacheControl: '3600', upsert: false });
+
+            if (error) throw error;
+
+            const { data: publicUrlData } = supabase.storage
+                .from('kyc-documents')
+                .getPublicUrl(filePath);
+
+            if (publicUrlData?.publicUrl) {
+                setFormData(prev => ({ ...prev, [fieldName]: publicUrlData.publicUrl }));
+            }
+        } catch (err) {
+            alert("Supabase Upload failed: " + (err.message || "Unknown error"));
+        } finally {
+            setUploadingTarget(null);
+            e.target.value = '';
+        }
+    };
+
+    const handleRegistration = async (e) => {
+        e.preventDefault();
+        
+        if (formData.hasGst === 'yes' && (!formData.gstPdfUrl || !formData.gstNumber)) {
+            setAuthError("Please provide your GST Number and upload your GST Certificate.");
+            return;
+        }
+        if (!formData.bankProofUrl || !formData.maskedAadhaarUrl) {
+            setAuthError("Please upload all required banking and ID documents.");
+            return;
+        }
+
+        setIsSubmitting(true);
+        setAuthError("");
+
+        try {
+            // Re-verify auth state before database hit
+            const auth = getAuth();
+            if (!auth.currentUser) {
+                throw new Error("Your secure session expired. Please log in again.");
+            }
+
+            const targetEmail = formData.email.toLowerCase().trim();
+            const isGstRegistered = formData.hasGst === 'yes';
+            
+            await setDoc(doc(db, "seller_applications", targetEmail), {
+                email: targetEmail,
+                ownerName: formData.ownerName,
+                brandName: formData.brandName,
+                phone: formData.phone,
+                whatsapp: formData.whatsapp,
+                role: "seller",
+                status: "kyc_submitted", 
+                kycData: {
+                    hasGst: isGstRegistered,
+                    gstNumber: isGstRegistered ? formData.gstNumber.toUpperCase() : 'UNREGISTERED',
+                    gstPdfUrl: isGstRegistered ? formData.gstPdfUrl : null,
+                    panNumber: formData.panNumber.toUpperCase(),
+                    accountNumber: formData.accountNumber,
+                    ifscCode: formData.ifscCode.toUpperCase(),
+                    bankProofUrl: formData.bankProofUrl,
+                    maskedAadhaarUrl: formData.maskedAadhaarUrl
+                },
+                createdAt: serverTimestamp(),
+                submittedAt: new Date().toISOString()
+            });
+
+            setIsSubmitting(false);
+            setRegistrationSuccess(true);
+        } catch (error) {
+            setIsSubmitting(false);
+            setAuthError(error?.message || "Permission Denied: Could not connect to the secured database.");
         }
     };
 
@@ -194,7 +327,11 @@ export default function SellerLanding() {
                             if (formStep === 2) setFormStep(1);
                             else setShowForm(false);
                         }} className="seller-back-link">
+<<<<<<< HEAD
                             <i className="fa-solid fa-arrow-left"></i> {formStep === 2 ? 'Back to Basic Info' : 'Back to Info'}
+=======
+                            <i className="fa-solid fa-arrow-left"></i> {formStep === 2 ? 'Back to Basic Info' : 'Cancel Application'}
+>>>>>>> bc9902d7fa589a8f5a74a24877e576adea882ce2
                         </button>
                     )}
 
@@ -202,7 +339,11 @@ export default function SellerLanding() {
                         {!registrationSuccess ? (
                             <>
                                 <div className="seller-form-header">
+<<<<<<< HEAD
                                     <span className="seller-eyebrow">Jamba Wear · Seller Onboarding</span>
+=======
+                                    <span className="seller-eyebrow">Jamba Wear · Secured Onboarding</span>
+>>>>>>> bc9902d7fa589a8f5a74a24877e576adea882ce2
                                     <h2 className="seller-form-title">{formStep === 1 ? 'Create Seller Account' : 'Legal & KYC Details'}</h2>
                                     <p className="seller-form-subtitle">Step {formStep} of 2 — {formStep === 1 ? 'Basic store details' : 'Verify your identity & banking via Supabase'}</p>
                                     <div className="seller-progress">
@@ -220,6 +361,7 @@ export default function SellerLanding() {
 
                                     {formStep === 1 ? (
                                         <form onSubmit={handleNextStep}>
+<<<<<<< HEAD
                                             <div className="form-grid-row">
                                                 <div className="form-group">
                                                     <label>Brand / Store Name</label>
@@ -273,6 +415,83 @@ export default function SellerLanding() {
                                                     {uploadingTarget === 'gstPdfUrl' && <span style={{ fontSize: '11px', color: 'var(--ws-brown)' }}>Uploading to Supabase...</span>}
                                                 </div>
                                             </div>
+=======
+                                            <div className="form-group">
+                                                <label>Business Email Address (Verified via Google)</label>
+                                                <input 
+                                                    type="email" 
+                                                    name="email" 
+                                                    value={formData.email} 
+                                                    readOnly 
+                                                    required 
+                                                    style={{ background: '#f3f4f6', color: '#6b7280', cursor: 'not-allowed', border: '1px solid #d1d5db' }} 
+                                                />
+                                            </div>
+
+                                            <div className="form-grid-row">
+                                                <div className="form-group">
+                                                    <label>Brand / Store Name</label>
+                                                    <input type="text" name="brandName" value={formData.brandName} onChange={handleInputChange} required placeholder="e.g. Bodo Weavers" />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label>Owner Full Name</label>
+                                                    <input type="text" name="ownerName" value={formData.ownerName} onChange={handleInputChange} required placeholder="John Doe" />
+                                                </div>
+                                            </div>
+
+                                            <div className="form-grid-row">
+                                                <div className="form-group">
+                                                    <label>Phone Number</label>
+                                                    <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} required minLength={10} maxLength={10} placeholder="9876543210" />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label>WhatsApp Number</label>
+                                                    <input type="tel" name="whatsapp" value={formData.whatsapp} onChange={handleInputChange} required minLength={10} maxLength={10} placeholder="9876543210" />
+                                                </div>
+                                            </div>
+
+                                            <div className="form-notice">
+                                                <i className="fa-solid fa-file-shield"></i>
+                                                <p><strong>Next Step:</strong> You will upload your GSTIN, Business PAN, Bank Details, and ID documents securely to Supabase storage on the next page.</p>
+                                            </div>
+
+                                            <button type="submit" className="seller-btn-primary seller-btn-block">
+                                                Continue to KYC <i className="fa-solid fa-arrow-right" style={{ marginLeft: '8px' }}></i>
+                                            </button>
+                                        </form>
+                                    ) : (
+                                        <form onSubmit={handleRegistration}>
+                                            <div className="form-group">
+                                                <label>Do you have a GSTIN?</label>
+                                                <select name="hasGst" value={formData.hasGst} onChange={handleInputChange} className="input-box" required style={{ width: '100%', padding: '12px', border: '1px solid #d1d5db', borderRadius: '6px' }}>
+                                                    <option value="yes">Yes, I am GST Registered</option>
+                                                    <option value="no">No, I sell Without GST (Unregistered Artisan)</option>
+                                                </select>
+                                            </div>
+
+                                            {formData.hasGst === 'yes' ? (
+                                                <div className="form-grid-row">
+                                                    <div className="form-group">
+                                                        <label>GSTIN Number</label>
+                                                        <input type="text" name="gstNumber" value={formData.gstNumber} onChange={handleInputChange} required placeholder="22AAAAA0000A1Z5" />
+                                                    </div>
+                                                    <div className="form-group">
+                                                        <label>GST Certificate (PDF/IMG)</label>
+                                                        {formData.gstPdfUrl ? (
+                                                            <div style={{ padding: '10px 14px', background: '#e6f4ea', color: '#137333', borderRadius: '8px', fontSize: '13px', border: '1px solid #ceead6' }}><i className="fa-solid fa-check"></i> Uploaded</div>
+                                                        ) : (
+                                                            <input type="file" accept=".pdf,image/*" onChange={(e) => handleSupabaseFileUpload(e, 'gstPdfUrl')} required style={{ padding: '8px' }} />
+                                                        )}
+                                                        {uploadingTarget === 'gstPdfUrl' && <span style={{ fontSize: '11px', color: 'var(--ws-brown)' }}>Uploading to Supabase...</span>}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="form-notice" style={{ background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a', marginBottom: '20px' }}>
+                                                    <i className="fa-solid fa-circle-info"></i>
+                                                    <p><strong>Without GST Mode:</strong> As an unregistered artisan, you will issue a statutory <strong>Bill of Supply</strong> instead of a Tax Invoice. No GST will be collected on your sales.</p>
+                                                </div>
+                                            )}
+>>>>>>> bc9902d7fa589a8f5a74a24877e576adea882ce2
 
                                             <div className="form-group">
                                                 <label>Business PAN Number</label>
@@ -353,16 +572,21 @@ export default function SellerLanding() {
                         Join Jamba Wear, the premier marketplace for authentic traditional fashion. Reach thousands of customers across India, manage your inventory effortlessly, and grow your business today.
                     </p>
                     <div className="seller-hero-actions">
-                        <button onClick={() => setShowForm(true)} className="seller-btn-primary">
-                            Start Selling Today
+                        <button onClick={handleSecureAuth} disabled={isLoggingIn} className="seller-btn-primary">
+                            {isLoggingIn ? <><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: '8px' }}></i> Authenticating...</> : "Start Selling Today"}
                         </button>
                         
+<<<<<<< HEAD
                         <button onClick={handleSellerLogin} disabled={isLoggingIn} className="seller-btn-ghost">
                             {isLoggingIn ? (
                                 <><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: '8px' }}></i> Authenticating...</>
                             ) : (
                                 <><i className="fa-brands fa-google" style={{ marginRight: '8px' }}></i> Login to Dashboard</>
                             )}
+=======
+                        <button onClick={handleSecureAuth} disabled={isLoggingIn} className="seller-btn-ghost">
+                            {isLoggingIn ? <><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: '8px' }}></i> Authenticating...</> : <><i className="fa-brands fa-google" style={{ marginRight: '8px' }}></i> Login to Dashboard</>}
+>>>>>>> bc9902d7fa589a8f5a74a24877e576adea882ce2
                         </button>
                     </div>
 
@@ -410,6 +634,7 @@ export default function SellerLanding() {
                     </div>
                 </div>
             </section>
+<<<<<<< HEAD
 
             <section className="seller-section">
                 <span className="seller-eyebrow seller-eyebrow-center">Why partner with us</span>
@@ -466,6 +691,8 @@ export default function SellerLanding() {
                     </button>
                 </div>
             </section>
+=======
+>>>>>>> bc9902d7fa589a8f5a74a24877e576adea882ce2
         </div>
     );
 }
