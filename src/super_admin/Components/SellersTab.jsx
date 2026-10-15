@@ -2,14 +2,13 @@ import React, { useState, useEffect } from "react";
 import { API_BASE_URL } from "../../apiConfig.js"; 
 import "../styles/Sellers.css";
 
-// ⚠️ ADJUST THIS RELATIVE PATH IF YOUR FIREBASE FILE IS LOCATED ELSEWHERE
-import { db } from '../../firebase'; 
+// 🔥 FIXED: Removed the direct db import. It now comes from props via AdminLayout!
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
-
-// ⚠️ ADJUST THIS RELATIVE PATH TO POINT TO YOUR EDITOR COMPONENT
 import SellerStorefrontEditor from '../../admin/SellerStorefrontEditor'; 
 
-export default function SellersTab({ getAuthHeaders, globalSellers = [], liveProducts = [], orders = [], loadAuthorizedSellers }) {
+// 🔥 FIXED: Added 'db' to the props
+export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liveProducts = [], orders = [], loadAuthorizedSellers }) {
+    
     // --- State Management ---
     const [mainViewTab, setMainViewTab] = useState("directory"); 
 
@@ -45,7 +44,8 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                 setIsLoadingApplications(false);
                 return;
             }
-            const q = query(collection(db, "users"), where("kyc_status", "==", "pending_kyc"));
+            
+            const q = query(collection(db, "seller_applications"), where("status", "==", "kyc_submitted"));
             const querySnapshot = await getDocs(q);
             
             const appsData = querySnapshot.docs.map(doc => ({
@@ -110,7 +110,7 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
         if (!window.confirm(`Are you sure you want to approve ${app.brandName}?`)) return;
         
         try {
-            await updateDoc(doc(db, "users", app.id), { kyc_status: "approved" });
+            await updateDoc(doc(db, "seller_applications", app.id), { status: "approved" });
             
             const headers = typeof getAuthHeaders === 'function' ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
             await fetch(`${API_BASE_URL}/admin/sellers`, {
@@ -131,7 +131,7 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
     const handleRejectApplication = async (appId) => {
         if (!window.confirm("Are you sure you want to reject this application?")) return;
         try {
-            await updateDoc(doc(db, "users", appId), { kyc_status: "rejected" });
+            await updateDoc(doc(db, "seller_applications", appId), { status: "rejected" });
             fetchApplications();
             if (window.showToast) window.showToast("Application rejected.");
         } catch (error) {
@@ -276,7 +276,6 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
         <div className="content-section active sellers-container">
             <span className="section-title" style={{ marginBottom: '16px', display: 'block' }}>Seller Directory</span>
             
-            {/* 🔥 THREE TABS NAV 🔥 */}
             <div className="seller-sub-nav">
                 <button 
                     type="button"
@@ -400,6 +399,7 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                                     <tr>
                                         <th>Brand & Owner</th>
                                         <th>Contact Info</th>
+                                        <th>Legal & KYC</th>
                                         <th>Date Applied</th>
                                         <th style={{ textAlign: 'right' }}>Actions</th>
                                     </tr>
@@ -415,6 +415,33 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                                                 <div style={{ marginBottom: '4px' }}><i className="fa-regular fa-envelope" style={{ width: '16px' }}></i> {app.email}</div>
                                                 <div style={{ marginBottom: '4px' }}><i className="fa-solid fa-phone" style={{ width: '16px' }}></i> {app.phone}</div>
                                                 <div style={{ color: '#059669' }}><i className="fa-brands fa-whatsapp" style={{ width: '16px' }}></i> {app.whatsapp}</div>
+                                            </td>
+                                            <td style={{ fontSize: '12px', color: '#374151' }}>
+                                                {app.kycData ? (
+                                                    <>
+                                                        <div style={{ marginBottom: '4px' }}><strong>GST:</strong> {app.kycData.gstNumber}</div>
+                                                        <div style={{ marginBottom: '8px' }}><strong>PAN:</strong> {app.kycData.panNumber}</div>
+                                                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                                            {app.kycData.gstPdfUrl && (
+                                                                <a href={app.kycData.gstPdfUrl} target="_blank" rel="noopener noreferrer" style={{ background: '#e5e7eb', padding: '4px 8px', borderRadius: '4px', textDecoration: 'none', color: '#111' }}>
+                                                                    <i className="fa-solid fa-file-pdf"></i> GST
+                                                                </a>
+                                                            )}
+                                                            {app.kycData.bankProofUrl && (
+                                                                <a href={app.kycData.bankProofUrl} target="_blank" rel="noopener noreferrer" style={{ background: '#e5e7eb', padding: '4px 8px', borderRadius: '4px', textDecoration: 'none', color: '#111' }}>
+                                                                    <i className="fa-solid fa-image"></i> Bank
+                                                                </a>
+                                                            )}
+                                                            {app.kycData.maskedAadhaarUrl && (
+                                                                <a href={app.kycData.maskedAadhaarUrl} target="_blank" rel="noopener noreferrer" style={{ background: '#e5e7eb', padding: '4px 8px', borderRadius: '4px', textDecoration: 'none', color: '#111' }}>
+                                                                    <i className="fa-solid fa-id-card"></i> ID
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <span style={{ color: '#9ca3af' }}>No KYC Data</span>
+                                                )}
                                             </td>
                                             <td style={{ fontSize: '13px', color: '#6b7280' }}>
                                                 {app.createdAt ? new Date(app.createdAt.toDate ? app.createdAt.toDate() : app.createdAt).toLocaleDateString() : 'N/A'}
@@ -444,7 +471,7 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                 </div>
             )}
 
-            {/* 🔥 NEW TAB 3: LIVE STOREFRONTS MONITORING 🔥 */}
+            {/* TAB 3: LIVE STOREFRONTS MONITORING */}
             {mainViewTab === "storefronts" && (
                 <div className="card" style={{ padding: editingSellerEmail ? '0' : '28px', background: editingSellerEmail ? 'transparent' : 'var(--ws-cream)', border: editingSellerEmail ? 'none' : '1px solid var(--ws-line)', boxShadow: editingSellerEmail ? 'none' : 'var(--ws-shadow)' }}>
                     

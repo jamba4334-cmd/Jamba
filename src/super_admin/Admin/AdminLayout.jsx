@@ -21,11 +21,8 @@ import CustomersTab from "../Components/CustomersTab.jsx";
 import ReviewsTab from "../Components/ReviewsTab.jsx";
 import MasterControlTab from "../Components/MasterControlTab.jsx";
 import PromoCodesTab from "../Components/PromoCodesTab.jsx"; 
-
-// 🔥 NEW: Import the Master Subscriptions Tab
 import SubscriptionsTab from "../Components/SubscriptionsTab.jsx";
 
-// --- Firebase Initialization ---
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY, 
     authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -218,7 +215,6 @@ export default function AdminLayout() {
         }
     }, [isAuthenticated, subAdminMaxDuration]);
 
-    // Use the signed-in administrator's short-lived Firebase ID token.
     const getAuthHeaders = async () => {
         const user = auth.currentUser;
         if (!user) {
@@ -232,7 +228,6 @@ export default function AdminLayout() {
         };
     };
 
-    // --- STANDARD TAB DATA FETCHING ---
     useEffect(() => {
         if (!isAuthenticated) return;
         if (activeTab === "live-products" && liveProducts.length === 0) loadAdminInventory();
@@ -244,19 +239,12 @@ export default function AdminLayout() {
         }
     }, [activeTab, isAuthenticated]);
 
-    // --- NEW: REAL-TIME AUTO-SYNC FOR ORDERS ---
     useEffect(() => {
         if (!isAuthenticated) return;
-        
-        // 1. Fetch orders immediately when you log in
         loadAdminOrders();
-
-        // 2. Silently ping the backend for new orders every 10 seconds
         const orderSyncInterval = setInterval(() => {
             loadAdminOrders();
-        }, 10000); // 10000 milliseconds = 10 seconds
-
-        // 3. Cleanup the timer if you log out
+        }, 10000); 
         return () => clearInterval(orderSyncInterval);
     }, [isAuthenticated]);
 
@@ -324,13 +312,13 @@ export default function AdminLayout() {
                 return <CategorySettings getAuthHeaders={getAuthHeaders} />;
             case "orders":
                 return <OrdersTab orders={orders} liveProducts={liveProducts} getAuthHeaders={getAuthHeaders} refreshOrders={loadAdminOrders} />;
-            case "seller-access":
-                return <SellersTab getAuthHeaders={getAuthHeaders} globalSellers={globalSellers} liveProducts={liveProducts} orders={orders} loadAuthorizedSellers={loadAuthorizedSellers} />;
             
-            // 🔥 NEW: Render Subscriptions Tab for Master Admin
+            // 🔥 FIXED: Passed the authenticated `db` prop into SellersTab
+            case "seller-access":
+                return <SellersTab db={db} getAuthHeaders={getAuthHeaders} globalSellers={globalSellers} liveProducts={liveProducts} orders={orders} loadAuthorizedSellers={loadAuthorizedSellers} />;
+            
             case "subscriptions":
                 return <SubscriptionsTab db={db} />;
-                
             case "earnings": 
                 return <EarningsTab getAuthHeaders={getAuthHeaders} />;
             case "promocodes": 
@@ -423,7 +411,6 @@ export default function AdminLayout() {
                             {globalPendingPayouts > 0 && <span className="sidebar-badge">{globalPendingPayouts}</span>}
                         </li>
                         
-                        {/* 🔥 NEW: Subscriptions Navigation Button */}
                         <li className={`nav-item ${activeTab === 'subscriptions' ? 'active' : ''}`} onClick={() => setActiveTab('subscriptions')}>
                             <i className="fa-solid fa-crown"></i> Subscriptions
                         </li>
