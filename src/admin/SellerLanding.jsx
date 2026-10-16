@@ -33,7 +33,7 @@ export default function SellerLanding() {
     const [formData, setFormData] = useState({
         ownerName: '',
         brandName: '',
-        email: '', // Strictly populated by Google Auth
+        email: '', 
         phone: '',
         whatsapp: '',
         hasGst: 'yes',
@@ -56,7 +56,7 @@ export default function SellerLanding() {
         setFormStep(2);
     };
 
-    // 🔥 SECURE ONBOARDING PIPELINE
+    // 🔥 SECURE ONBOARDING PIPELINE (NO COOLDOWNS)
     const routeSeller = useCallback(async (user) => {
         const userEmail = (user.email || '').toLowerCase();
         if (!userEmail || !user.emailVerified) {
@@ -77,7 +77,7 @@ export default function SellerLanding() {
             const appData = appSnap.data();
 
             if (appData.status === "rejected") {
-                // Application rejected: Show reason and allow immediate re-application
+                // Application rejected: Show reason and allow IMMEDIATE re-application
                 setRejectionInfo({ 
                     reason: appData.rejectionReason || '', 
                     appData: appData 
@@ -263,32 +263,28 @@ export default function SellerLanding() {
         }
     };
 
-    // 🔥 REJECTED STATE UI (Centered Layout)
+    // 🔥 REJECTED STATE UI (Centered Layout with NO Cooldown)
     if (appStatus === 'rejected' && !showForm) {
         return (
             <div className="seller-form-page">
-                <div className="seller-form-shell" style={{ width: '100%', maxWidth: '520px', margin: '0 auto' }}>
-                    <div className="seller-form-card">
-                        <div className="success-card">
-                            <div className="success-medallion" style={{ borderColor: '#f87171', background: '#fef2f2' }}>
-                                <i className="fa-solid fa-circle-xmark" style={{ fontSize: '32px', color: '#dc2626' }}></i>
-                            </div>
-                            <h2>Application Not Approved</h2>
-                            <p>Your seller application for <strong>{formData.email}</strong> was not approved.</p>
-                            
-                            {rejectionInfo.reason && (
-                                <p style={{ fontSize: '0.9rem', background: '#fef2f2', color: '#991b1b', padding: '16px', borderRadius: '8px', border: '1px solid #fecaca', textAlign: 'left', lineHeight: '1.6' }}>
-                                    <strong>Reason:</strong> {rejectionInfo.reason}
-                                </p>
-                            )}
-                            
-                            <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '32px' }}>
-                                <button className="seller-btn-primary" onClick={handleReapply}>
-                                    Re-apply Now
-                                </button>
-                                <button className="seller-btn-ghost" onClick={handleSignOut}>Sign Out</button>
-                            </div>
-                        </div>
+                <div className="seller-form-card" style={{ width: '100%', maxWidth: '480px', margin: '0 auto', padding: '48px 32px', textAlign: 'center' }}>
+                    <div className="success-medallion" style={{ margin: '0 auto 24px', borderColor: '#f87171', background: '#fef2f2' }}>
+                        <i className="fa-solid fa-circle-xmark" style={{ fontSize: '32px', color: '#dc2626' }}></i>
+                    </div>
+                    <h2 style={{ fontSize: '1.5rem', marginBottom: '12px', color: 'var(--ws-ink)' }}>Application Not Approved</h2>
+                    <p style={{ color: 'var(--ws-body)', marginBottom: '24px' }}>Your seller application for <strong>{formData.email}</strong> was not approved.</p>
+                    
+                    {rejectionInfo.reason && (
+                        <p style={{ fontSize: '0.9rem', background: '#fef2f2', color: '#991b1b', padding: '16px', borderRadius: '8px', border: '1px solid #fecaca', textAlign: 'left', lineHeight: '1.6', margin: '0 0 32px' }}>
+                            <strong>Reason:</strong> {rejectionInfo.reason}
+                        </p>
+                    )}
+                    
+                    <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+                        <button className="seller-btn-primary" onClick={handleReapply}>
+                            Re-apply Now
+                        </button>
+                        <button className="seller-btn-ghost" onClick={handleSignOut}>Sign Out</button>
                     </div>
                 </div>
             </div>
@@ -299,28 +295,25 @@ export default function SellerLanding() {
     if (appStatus === 'pending' && !showForm) {
         return (
             <div className="seller-form-page">
-                <div className="seller-form-shell" style={{ width: '100%', maxWidth: '520px', margin: '0 auto' }}>
-                    <div className="seller-form-card">
-                        <div className="success-card">
-                            <div className="success-medallion">
-                                <i className="fa-solid fa-hourglass-half" style={{ fontSize: '32px', color: 'var(--ws-brown)' }}></i>
-                            </div>
-                            <h2>Application Under Review</h2>
-                            <p>Your application{formData.brandName ? <> for <strong>{formData.brandName}</strong></> : null} is with our admin team.</p>
-                            <p style={{ fontSize: '0.85rem', color: 'var(--ws-body)', background: 'var(--ws-muted)', padding: '16px', borderRadius: '8px', lineHeight: '1.6' }}>
-                                Review usually takes 24-48 hours. Once approved, sign in again and you'll go straight to your Seller Dashboard.
-                            </p>
-                            <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '32px' }}>
-                                <button className="seller-btn-primary" onClick={() => navigate('/')}>Return Home</button>
-                                <button className="seller-btn-ghost" onClick={handleSignOut}>Sign Out</button>
-                            </div>
-                        </div>
+                <div className="seller-form-card" style={{ width: '100%', maxWidth: '480px', margin: '0 auto', padding: '48px 32px', textAlign: 'center' }}>
+                    <div className="success-medallion" style={{ margin: '0 auto 24px' }}>
+                        <i className="fa-solid fa-hourglass-half" style={{ fontSize: '32px', color: 'var(--ws-brown)' }}></i>
+                    </div>
+                    <h2 style={{ fontSize: '1.5rem', marginBottom: '12px', color: 'var(--ws-ink)' }}>Application Under Review</h2>
+                    <p style={{ color: 'var(--ws-body)', marginBottom: '24px' }}>Your application{formData.brandName ? <> for <strong>{formData.brandName}</strong></> : null} is with our admin team.</p>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--ws-body)', background: 'var(--ws-muted)', padding: '16px', borderRadius: '8px', lineHeight: '1.6', margin: '0 0 32px' }}>
+                        Review usually takes 24-48 hours. Once approved, sign in again and you'll go straight to your Seller Dashboard.
+                    </p>
+                    <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+                        <button className="seller-btn-primary" onClick={() => navigate('/')}>Return Home</button>
+                        <button className="seller-btn-ghost" onClick={handleSignOut}>Sign Out</button>
                     </div>
                 </div>
             </div>
         );
     }
 
+    // 🔥 APPLICATION FORM UI
     if (showForm) {
         return (
             <div className="seller-form-page">
@@ -486,16 +479,17 @@ export default function SellerLanding() {
                                 </div>
                             </>
                         ) : (
-                            <div className="success-card">
-                                <div className="success-medallion">
+                            // 🔥 SUCCESS STATE UI (Fixed Layout)
+                            <div style={{ padding: '48px 32px', textAlign: 'center' }}>
+                                <div className="success-medallion" style={{ margin: '0 auto 24px' }}>
                                     <i className="fa-solid fa-file-shield" style={{ fontSize: '32px', color: 'var(--ws-brown)' }}></i>
                                 </div>
-                                <h2>KYC Under Review</h2>
-                                <p>Your legal documents and application for <strong>{formData.brandName}</strong> have been safely uploaded and transmitted to our administrative team.</p>
-                                <p style={{ fontSize: '0.85rem', color: 'var(--ws-body)', background: 'var(--ws-muted)', padding: '16px', borderRadius: '8px', lineHeight: '1.6' }}>
+                                <h2 style={{ fontSize: '1.5rem', marginBottom: '12px', color: 'var(--ws-ink)' }}>KYC Under Review</h2>
+                                <p style={{ color: 'var(--ws-body)', marginBottom: '24px' }}>Your legal documents and application for <strong>{formData.brandName}</strong> have been safely uploaded and transmitted to our administrative team.</p>
+                                <p style={{ fontSize: '0.85rem', color: 'var(--ws-body)', background: 'var(--ws-muted)', padding: '16px', borderRadius: '8px', lineHeight: '1.6', margin: '0 0 32px' }}>
                                     Verification typically takes 24-48 hours. We will notify you via email once your storefront is ready to go live.
                                 </p>
-                                <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '32px' }}>
+                                <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
                                     <button className="seller-btn-primary" onClick={() => navigate('/')}>Return to Home</button>
                                 </div>
                             </div>

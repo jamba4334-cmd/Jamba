@@ -2,16 +2,12 @@ import React, { useState, useEffect } from "react";
 import { API_BASE_URL } from "../../apiConfig.js"; 
 import "../styles/Sellers.css";
 
-// ⚠️ ADJUST THIS RELATIVE PATH IF YOUR FIREBASE FILE IS LOCATED ELSEWHERE
 import { db } from '../../firebase'; 
-import { collection, query, where, getDocs, doc, updateDoc, setDoc , serverTimestamp } from "firebase/firestore";
-import { getAuth } from 'firebase/auth';
+import { collection, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
 
-// ⚠️ ADJUST THIS RELATIVE PATH TO POINT TO YOUR EDITOR COMPONENT
 import SellerStorefrontEditor from '../../admin/SellerStorefrontEditor'; 
 
 export default function SellersTab({ getAuthHeaders, globalSellers = [], liveProducts = [], orders = [], loadAuthorizedSellers }) {
-    // --- State Management ---
     const [mainViewTab, setMainViewTab] = useState("directory"); 
 
     const [newSellerEmail, setNewSellerEmail] = useState("");
@@ -25,6 +21,7 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
     // Onboarding States
     const [pendingApplications, setPendingApplications] = useState([]);
     const [isLoadingApplications, setIsLoadingApplications] = useState(false);
+    const [applicationError, setApplicationError] = useState(""); // 🔥 NEW: Track Firebase errors
 
     // Storefront Monitor States
     const [storefronts, setStorefronts] = useState([]);
@@ -40,9 +37,10 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
 
     const fetchApplications = async () => {
         setIsLoadingApplications(true);
+        setApplicationError(""); // Reset errors
         try {
             if (!db) {
-                console.error("Firebase DB instance is missing or not imported correctly.");
+                setApplicationError("Firebase DB instance is missing.");
                 setIsLoadingApplications(false);
                 return;
             }
@@ -60,6 +58,8 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
             setPendingApplications(appsData);
         } catch (error) {
             console.error("Error fetching pending applications:", error);
+            // 🔥 NEW: Display the exact Firebase error to the Admin
+            setApplicationError(error.message || "Failed to load applications.");
         } finally {
             setIsLoadingApplications(false);
         }
@@ -114,7 +114,6 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
         if (!window.confirm(`Are you sure you want to approve ${app.brandName}?`)) return;
         
         try {
-            // 1. Move the seller into the authorized_sellers collection (Database First)
             await setDoc(doc(db, 'authorized_sellers', app.email), {
                 email: app.email,
                 brandName: app.brandName,
@@ -124,16 +123,8 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                 kycData: app.kycData || null
             });
             
-            // 2. Mark the application as approved
-            await updateDoc(doc(db, "seller_applications", app.id), {
-                status: "approved",
-                approvedAt: serverTimestamp(),
-                reviewedBy: getAuth().currentUser?.email || null,
-                rejectionReason: null,
-                rejectedAt: null
-            });
+            await updateDoc(doc(db, "seller_applications", app.id), { status: "approved" });
             
-            // 3. Keep backend logic running in a non-blocking way
             try {
                 const headers = typeof getAuthHeaders === 'function' ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
                 await fetch(`${API_BASE_URL}/admin/sellers`, {
@@ -150,35 +141,22 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
             if (typeof loadAuthorizedSellers === 'function') loadAuthorizedSellers(); 
         } catch (error) {
             console.error("Error approving seller:", error);
-            if (error && error.code === "permission-denied") {
-                const signedInAs = getAuth().currentUser?.email || "an unknown account";
-                alert(`Approval Failed: the database blocked this action.\n\nYou are signed in as: ${signedInAs}\n\nSign out and sign back in with the admin account (jamba4334@gmail.com), and make sure the latest Firestore rules are published in the Firebase Console.`);
-            } else {
-                alert(`Approval Failed: ${error.message}`);
-            }
+            alert(`Approval Failed: ${error.message}`);
         }
     };
 
     const handleRejectApplication = async (appId) => {
-        const reason = window.prompt(
-            "Reason for rejection (the seller will see this).\nExamples: Invalid IFSC code, Blurry GST certificate, PAN does not match name",
-            ""
-        );
-        if (reason === null) return; // cancelled
-        const cleanReason = reason.trim().slice(0, 300);
-        if (cleanReason.length < 3) {
-            alert("Please enter a short reason so the seller knows what to fix.");
-            return;
-        }
+        const reason = window.prompt("Enter the reason for rejection (this will be shown to the seller):");
+        if (reason === null) return; 
+
         try {
-            await updateDoc(doc(db, "seller_applications", appId), {
+            await updateDoc(doc(db, "seller_applications", appId), { 
                 status: "rejected",
-                rejectionReason: cleanReason,
-                rejectedAt: serverTimestamp(),
-                reviewedBy: getAuth().currentUser?.email || null
+                rejectionReason: reason || "Your application did not meet our platform requirements.",
+                rejectedAt: new Date().toISOString()
             });
             fetchApplications();
-            if (window.showToast) window.showToast("Application rejected. Seller can re-apply after 24 hours.");
+            if (window.showToast) window.showToast("Application rejected.");
         } catch (error) {
             console.error("Error rejecting application:", error);
             alert(`Rejection Failed: ${error.message}`);
@@ -322,7 +300,6 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
         <div className="content-section active sellers-container">
             <span className="section-title" style={{ marginBottom: '16px', display: 'block' }}>Seller Directory</span>
             
-            {/* 🔥 THREE TABS NAV 🔥 */}
             <div className="seller-sub-nav">
                 <button 
                     type="button"
@@ -420,7 +397,7 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                 </>
             )}
 
-            {/* 🔥 TAB 2: PENDING ONBOARDING QUEUE (UPDATED UI) 🔥 */}
+            {/* TAB 2: PENDING ONBOARDING QUEUE */}
             {mainViewTab === "onboarding" && (
                 <div className="card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -433,13 +410,23 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                         </button>
                     </div>
                     
+                    {/* 🔥 NEW: ERROR DISPLAY AREA 🔥 */}
+                    {applicationError && (
+                        <div style={{ padding: '16px', marginBottom: '20px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#991b1b', fontSize: '14px' }}>
+                            <strong><i className="fa-solid fa-shield-halved"></i> Access Denied:</strong> {applicationError}
+                            <div style={{ marginTop: '8px', fontSize: '13px', color: '#b91c1c' }}>
+                                Your current email does not have Master Admin rights. Log in with <strong>jamba4334@gmail.com</strong>, or add your email to the <code>admin_users</code> database collection.
+                            </div>
+                        </div>
+                    )}
+
                     {isLoadingApplications ? (
                         <p style={{ color: 'var(--text-muted)', padding: '20px 0' }}>Loading applications...</p>
-                    ) : pendingApplications.length === 0 ? (
+                    ) : pendingApplications.length === 0 && !applicationError ? (
                         <div style={{ padding: '40px', textAlign: 'center', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px dashed #d1d5db' }}>
                             <p style={{ color: '#6b7280', margin: 0 }}>No pending merchant applications right now.</p>
                         </div>
-                    ) : (
+                    ) : pendingApplications.length > 0 ? (
                         <div className="onboarding-table-wrapper" style={{ overflowX: 'auto' }}>
                             <table className="onboarding-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                 <thead>
@@ -454,7 +441,6 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                                 <tbody>
                                     {pendingApplications.map(app => (
                                         <tr key={app.id} style={{ borderBottom: '1px solid #e5e7eb', fontSize: '14px' }}>
-                                            {/* 1. Brand & Contact */}
                                             <td style={{ padding: '16px' }}>
                                                 <div style={{ fontWeight: '700', color: '#111827', fontSize: '15px' }}>{app.brandName}</div>
                                                 <div style={{ color: '#4b5563', fontSize: '13px', marginBottom: '6px' }}>{app.ownerName}</div>
@@ -466,7 +452,6 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                                                 </div>
                                             </td>
 
-                                            {/* 2. GST Status */}
                                             <td style={{ padding: '16px' }}>
                                                 <span style={{ 
                                                     background: app.kycData?.hasGst ? '#dcfce7' : '#fef3c7', 
@@ -481,14 +466,12 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                                                 </div>
                                             </td>
 
-                                            {/* 3. Banking & PAN */}
                                             <td style={{ padding: '16px', fontSize: '13px', color: '#374151', lineHeight: '1.6' }}>
                                                 <div><strong style={{ color: '#111827' }}>PAN:</strong> {app.kycData?.panNumber || 'N/A'}</div>
                                                 <div><strong style={{ color: '#111827' }}>A/C:</strong> {app.kycData?.accountNumber || 'N/A'}</div>
                                                 <div><strong style={{ color: '#111827' }}>IFSC:</strong> {app.kycData?.ifscCode || 'N/A'}</div>
                                             </td>
 
-                                            {/* 4. Document Links */}
                                             <td style={{ padding: '16px' }}>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                                     {app.kycData?.gstPdfUrl && (
@@ -509,7 +492,6 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                                                 </div>
                                             </td>
 
-                                            {/* 5. Actions */}
                                             <td style={{ padding: '16px', verticalAlign: 'middle', textAlign: 'right' }}>
                                                 <button onClick={() => handleApproveApplication(app)} style={{ background: '#10b981', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', width: '100%', marginBottom: '8px', display: 'flex', justifyContent: 'center', gap: '6px', alignItems: 'center' }}>
                                                     <i className="fa-solid fa-check"></i> Approve
@@ -523,7 +505,7 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                                 </tbody>
                             </table>
                         </div>
-                    )}
+                    ) : null}
                 </div>
             )}
 
