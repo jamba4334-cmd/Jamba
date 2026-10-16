@@ -2,12 +2,13 @@ import React, { useState, useEffect } from "react";
 import { API_BASE_URL } from "../../apiConfig.js"; 
 import "../styles/Sellers.css";
 
-import { db } from '../../firebase'; 
+// 🔥 FIXED: Removed local db import to prevent connection collisions
 import { collection, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
 
 import SellerStorefrontEditor from '../../admin/SellerStorefrontEditor'; 
 
-export default function SellersTab({ getAuthHeaders, globalSellers = [], liveProducts = [], orders = [], loadAuthorizedSellers }) {
+// 🔥 FIXED: Accepting 'db' as a prop directly from AdminLayout
+export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liveProducts = [], orders = [], loadAuthorizedSellers }) {
     const [mainViewTab, setMainViewTab] = useState("directory"); 
 
     const [newSellerEmail, setNewSellerEmail] = useState("");
@@ -21,7 +22,7 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
     // Onboarding States
     const [pendingApplications, setPendingApplications] = useState([]);
     const [isLoadingApplications, setIsLoadingApplications] = useState(false);
-    const [applicationError, setApplicationError] = useState(""); // 🔥 NEW: Track Firebase errors
+    const [applicationError, setApplicationError] = useState("");
 
     // Storefront Monitor States
     const [storefronts, setStorefronts] = useState([]);
@@ -37,7 +38,7 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
 
     const fetchApplications = async () => {
         setIsLoadingApplications(true);
-        setApplicationError(""); // Reset errors
+        setApplicationError(""); 
         try {
             if (!db) {
                 setApplicationError("Firebase DB instance is missing.");
@@ -58,7 +59,6 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
             setPendingApplications(appsData);
         } catch (error) {
             console.error("Error fetching pending applications:", error);
-            // 🔥 NEW: Display the exact Firebase error to the Admin
             setApplicationError(error.message || "Failed to load applications.");
         } finally {
             setIsLoadingApplications(false);
@@ -410,7 +410,6 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                         </button>
                     </div>
                     
-                    {/* 🔥 NEW: ERROR DISPLAY AREA 🔥 */}
                     {applicationError && (
                         <div style={{ padding: '16px', marginBottom: '20px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#991b1b', fontSize: '14px' }}>
                             <strong><i className="fa-solid fa-shield-halved"></i> Access Denied:</strong> {applicationError}
@@ -515,6 +514,7 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                     
                     {editingSellerEmail ? (
                         <SellerStorefrontEditor 
+                            db={db}
                             adminSellerEmail={editingSellerEmail} 
                             onBackToAdmin={() => setEditingSellerEmail(null)} 
                             getAuthHeaders={getAuthHeaders} 

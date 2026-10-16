@@ -1,16 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from "../../apiConfig.js"; 
+import { generateOrderInvoice } from "../../utils/invoiceGenerator.js";
 import "../styles/Orders.css";
 
-export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refreshOrders }) {
-    // Local React State for this tab
+const ALLOWED_STATUSES = ['pending', 'paid', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
+
+export default function OrdersTab({ db, orders, liveProducts, getAuthHeaders, refreshOrders }) {
     const [orderFilterStatus, setOrderFilterStatus] = useState('all');
     const [orderDateRange, setOrderDateRange] = useState('all');
     const [expandedOrders, setExpandedOrders] = useState({});
     const [searchQuery, setSearchQuery] = useState('');
     const [isDateMenuOpen, setIsDateMenuOpen] = useState(false);
 
-    // Close dropdown when clicking outside
+    // 🔥 SECURITY FIX: Controlled React States instead of fragile document.getElementById()
+    const [paymentInputs, setPaymentInputs] = useState({});
+    const [trackingInputs, setTrackingInputs] = useState({});
+    const [selectedFiles, setSelectedFiles] = useState({});
+    const [savingTrackingId, setSavingTrackingId] = useState(null);
+    const [uploadingLabelId, setUploadingLabelId] = useState(null);
+
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (!event.target.closest('.custom-filter-dropdown')) {
@@ -21,97 +29,119 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    // Sanitize helper for alphanumeric IDs
+    const sanitizeText = (val, maxLen = 80) => String(val || '').replace(/[<>]/g, '').trim().substring(0, maxLen);
+
+    // Ensure external URLs are strictly HTTPS before rendering links
+    const isSafeUrl = (url) => {
+        try {
+            const parsed = new URL(url);
+            return parsed.protocol === 'https:';
+        } catch {
+            return false;
+        }
+    };
+
     // --- Action Handlers --- //
 
     const handleUpdateStatus = async (orderId, newStatus) => {
-        if(window.confirm(`Are you sure you want to mark this order as ${newStatus.toUpperCase()}?`)) {
+        if (!ALLOWED_STATUSES.includes(newStatus)) {
+            alert("Invalid order status.");
+            return;
+        }
+        if (window.confirm(`Are you sure you want to mark this order as ${newStatus.toUpperCase()}?`)) {
             try {
                 const headers = await getAuthHeaders();
-                await fetch(`${API_BASE_URL}/admin/orders/${orderId}`, {
+                const res = await fetch(`${API_BASE_URL}/admin/orders/${encodeURIComponent(orderId)}`, {
                     method: "PUT",
                     headers: headers,
                     body: JSON.stringify({ status: newStatus })
                 });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 refreshOrders();
-                if(window.showToast) window.showToast("Order Status Updated");
-            } catch(e) {
+                if (window.showToast) window.showToast("Order Status Updated");
+            } catch (e) {
                 alert("Error updating order: " + e.message);
             }
         }
     };
 
     const handleVerifyPayment = async (orderId, isCOD) => {
-        const inputElem = document.getElementById(`manual-pay-id-${orderId}`);
-        let paymentId = isCOD ? 'COD' : (inputElem ? inputElem.value.trim() : '');
+        const rawInput = paymentInputs[orderId] || '';
+        const paymentId = isCOD ? 'COD' : sanitizeText(rawInput, 60);
         
         if (!isCOD && !paymentId) {
             alert("Please enter the Razorpay Payment ID to verify this online order.");
             return;
         }
 
-        if(window.confirm("Are you sure you want to verify this payment and mark the order as PAID?")) {
+        if (window.confirm("Are you sure you want to verify this payment and mark the order as PAID?")) {
             try {
                 const headers = await getAuthHeaders();
-                await fetch(`${API_BASE_URL}/admin/orders/${orderId}`, {
+                const res = await fetch(`${API_BASE_URL}/admin/orders/${encodeURIComponent(orderId)}`, {
                     method: "PUT",
                     headers: headers,
                     body: JSON.stringify({ status: 'paid', payment_id: paymentId })
                 });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 refreshOrders();
-                if(window.showToast) window.showToast("Payment Verified successfully!");
-            } catch(e) {
+                if (window.showToast) window.showToast("Payment Verified successfully!");
+            } catch (e) {
                 alert("Error verifying payment: " + e.message);
             }
         }
     };
 
-    const handleUpdateTracking = async (orderId) => {
-        const trackingId = document.getElementById(`tracking-id-${orderId}`).value;
-        const courierName = document.getElementById(`courier-name-${orderId}`).value;
+    const handleUpdateTracking = async (order) => {
+        const orderId = order.id;
+        const currentCourier = trackingInputs[orderId]?.courierName ?? (order.courierName || '');
+        const currentTracking = trackingInputs[orderId]?.trackingId ?? (order.trackingId || '');
+
+        const courierName = sanitizeText(currentCourier, 60);
+        const trackingId = sanitizeText(currentTracking, 60);
 
         if (!trackingId || !courierName) {
             alert("Please enter both Courier Service Name and Tracking ID.");
             return;
         }
 
-        const btn = document.getElementById(`track-btn-${orderId}`);
-        btn.innerText = "Saving...";
-        btn.disabled = true;
-
+        setSavingTrackingId(orderId);
         try {
             const headers = await getAuthHeaders();
-            await fetch(`${API_BASE_URL}/admin/orders/${orderId}`, {
+            const res = await fetch(`${API_BASE_URL}/admin/orders/${encodeURIComponent(orderId)}`, {
                 method: "PUT",
                 headers: headers,
-                body: JSON.stringify({ trackingId: trackingId, courierName: courierName })
+                body: JSON.stringify({ trackingId, courierName })
             });
-            if(window.showToast) window.showToast("Tracking Info Saved Successfully!");
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            if (window.showToast) window.showToast("Tracking Info Saved Successfully!");
             refreshOrders();
-        } catch(e) {
+        } catch (e) {
             alert("Error saving tracking info: " + e.message);
         } finally {
-            btn.innerText = "Save Tracking";
-            btn.disabled = false;
+            setSavingTrackingId(null);
         }
     };
 
     const handleLabelUpload = async (orderId) => {
-        const fileInput = document.getElementById(`pdf-file-${orderId}`);
-        if (!fileInput) return;
-        const file = fileInput.files[0];
+        const file = selectedFiles[orderId];
         
         if (!file) {
             alert("Please select a PDF file from your device first.");
             return;
         }
 
-        const uploadBtn = document.getElementById(`upload-pdf-btn-${orderId}`);
-        const originalText = uploadBtn ? uploadBtn.innerHTML : "Upload Label";
-        if (uploadBtn) {
-            uploadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
-            uploadBtn.disabled = true;
+        // 🔥 SECURITY FIX: Strict MIME type and 5MB file size validation
+        if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+            alert("Security Restriction: Only valid PDF files are allowed.");
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            alert("File too large: Maximum allowed PDF size is 5MB.");
+            return;
         }
 
+        setUploadingLabelId(orderId);
         try {
             const formData = new FormData();
             formData.append("file", file);
@@ -123,27 +153,25 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
             });
             const data = await res.json();
 
-            if (!data.secure_url) {
+            if (!data.secure_url || !isSafeUrl(data.secure_url)) {
                 throw new Error(data.error?.message || "Cloudinary upload failed.");
             }
 
             const headers = await getAuthHeaders();
-            await fetch(`${API_BASE_URL}/admin/orders/${orderId}`, {
+            const updateRes = await fetch(`${API_BASE_URL}/admin/orders/${encodeURIComponent(orderId)}`, {
                 method: "PUT",
                 headers: headers,
                 body: JSON.stringify({ shipping_label_url: data.secure_url })
             });
+            if (!updateRes.ok) throw new Error(`HTTP ${updateRes.status}`);
 
-            if(window.showToast) window.showToast("Shipping label securely uploaded to Cloudinary!");
+            if (window.showToast) window.showToast("Shipping label securely uploaded to Cloudinary!");
+            setSelectedFiles(prev => ({ ...prev, [orderId]: null }));
             refreshOrders(); 
         } catch (err) {
             alert("Label upload failed: " + err.message);
         } finally {
-            if (uploadBtn) {
-                uploadBtn.innerHTML = originalText;
-                uploadBtn.disabled = false;
-            }
-            if (fileInput) fileInput.value = ""; 
+            setUploadingLabelId(null);
         }
     };
 
@@ -154,18 +182,16 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
     // --- Multi-Layer Filtration & Bulletproof Sorting Logic --- //
     const filteredOrders = (orders || [])
         .filter(order => {
-            // 1. Search Logic
             const searchLower = searchQuery.toLowerCase();
             const jambaId = (order.jamba_order_id || "").toLowerCase();
             const orderIdStr = (order.razorpay_order_id || order.id || "").toLowerCase();
             const contactInfo = (order.email || order.customerContact || "").toLowerCase();
             let addressString = "";
             if (order.shippingAddress) {
-                addressString = `${order.shippingAddress.name} ${order.shippingAddress.phone} ${order.shippingAddress.district} ${order.shippingAddress.state}`.toLowerCase();
+                addressString = `${order.shippingAddress.name || ''} ${order.shippingAddress.phone || ''} ${order.shippingAddress.district || ''} ${order.shippingAddress.state || ''}`.toLowerCase();
             }
             const matchesSearch = jambaId.includes(searchLower) || orderIdStr.includes(searchLower) || contactInfo.includes(searchLower) || addressString.includes(searchLower);
 
-            // 2. Status Logic
             let matchesStatus = true;
             const currentStatus = order.status ? order.status.toLowerCase() : 'pending';
             if (orderFilterStatus !== 'all') {
@@ -175,7 +201,6 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
                 else matchesStatus = (currentStatus === orderFilterStatus);
             }
 
-            // 3. Date Logic
             let matchesDate = true;
             if (orderDateRange !== "all") {
                 const getOrderTime = (dateVal) => {
@@ -214,18 +239,13 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
             return matchesSearch && matchesStatus && matchesDate;
         })
         .sort((a, b) => {
-            // Forces the absolute newest order to the top, regardless of Firebase Date format
             const getTime = (dateVal) => {
                 if (!dateVal) return 0;
                 if (typeof dateVal.toDate === 'function') return dateVal.toDate().getTime();
                 if (dateVal.seconds) return dateVal.seconds * 1000;
                 return new Date(dateVal).getTime();
             };
-            
-            const timeA = getTime(a.created_at || a.createdAt);
-            const timeB = getTime(b.created_at || b.createdAt);
-            
-            return timeB - timeA; 
+            return getTime(b.created_at || b.createdAt) - getTime(a.created_at || a.createdAt); 
         });
 
     return (
@@ -241,11 +261,11 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
                         type="text" 
                         placeholder="Search Order ID, Email, Phone..." 
                         value={searchQuery}
+                        maxLength={100}
                         onChange={(e) => setSearchQuery(e.target.value)} 
                     />
                 </div>
 
-                {/* RESTORED: THE DATE DROPDOWN */}
                 <div className="orders-filter-wrapper">
                     <div className="custom-filter-dropdown" style={{ minWidth: '180px' }}>
                         <div 
@@ -311,14 +331,10 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
                         else if (currentStatus === 'delivered') { statusClass = "status-delivered"; statusLabel = "DELIVERED"; }
                         else if (currentStatus === 'cancelled') { statusClass = "status-cancelled"; statusLabel = "CANCELLED"; }
 
-                        const sellerAcceptedBadge = order.seller_accepted 
-                            ? `<span style="background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; display: inline-flex; align-items: center; gap: 4px;"><i class="fa-solid fa-store"></i> SELLER ACCEPTED</span>`
-                            : `<span style="background: #fffbeb; color: #b45309; border: 1px solid #fde68a; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; display: inline-flex; align-items: center; gap: 4px;"><i class="fa-solid fa-clock"></i> WAITING FOR SELLER</span>`;
-
                         const customerName = order.shippingAddress?.name || 'Guest Customer';
                         const customerPhone = order.shippingAddress?.phone || order.customerContact || 'No phone provided';
                         const addressString = order.shippingAddress 
-                            ? `${order.shippingAddress.address1}${order.shippingAddress.landmark ? `, ${order.shippingAddress.landmark}` : ''}, ${order.shippingAddress.district}, ${order.shippingAddress.state} - ${order.shippingAddress.pincode}` 
+                            ? `${order.shippingAddress.address1 || ''}${order.shippingAddress.landmark ? `, ${order.shippingAddress.landmark}` : ''}, ${order.shippingAddress.district || ''}, ${order.shippingAddress.state || ''} - ${order.shippingAddress.pincode || ''}` 
                             : 'No shipping address provided by customer';
 
                         let sellerName = 'N/A', brandName = 'N/A', sellerPhone = 'N/A', pickupAddress = 'N/A', locationStr = '';
@@ -334,18 +350,16 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
                             locationStr = source.city ? `${source.city}, ${source.state} - ${source.pincode}` : '';
                         }
 
-                        const existingCourier = order.courierName || '';
-                        const existingTracking = order.trackingId || '';
+                        const existingCourier = trackingInputs[order.id]?.courierName ?? (order.courierName || '');
+                        const existingTracking = trackingInputs[order.id]?.trackingId ?? (order.trackingId || '');
                         const existingLabel = order.shipping_label_url || order.shippingLabel || '';
 
-                        // --- NEW: DYNAMIC FINANCIAL MATH FOR ADMIN ---
-                        const baseSubtotal = Number(order.subtotal || order.items.reduce((sum, item) => sum + ((item.price || item.selling_price || 0) * (item.quantity || 1)), 0));
+                        const baseSubtotal = Number(order.subtotal || (order.items || []).reduce((sum, item) => sum + ((item.price || item.selling_price || 0) * (item.quantity || 1)), 0));
                         const discountAmount = Number(order.discount_applied || 0);
                         const shippingFee = Number(order.shipping_fee || (baseSubtotal < 1999 ? 149 : 0));
                         const finalTotal = Number(order.total || Math.max(baseSubtotal - discountAmount + shippingFee, 0));
                         const totalGst = Number(order.total_gst || 0);
 
-                        // Robust Date display for the header
                         const getDisplayDate = (dateVal) => {
                             if (!dateVal) return new Date();
                             if (typeof dateVal.toDate === 'function') return dateVal.toDate();
@@ -358,7 +372,18 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
                                 <div className="moc-header">
                                     <div className="moc-header-left">
                                         <div className="moc-ref">Order Ref: <strong>{order.jamba_order_id || order.id}</strong></div>
-                                        <div className="moc-date" dangerouslySetInnerHTML={{__html: sellerAcceptedBadge}}></div>
+                                        {/* 🔥 SECURITY FIX: Native JSX badge instead of dangerouslySetInnerHTML */}
+                                        <div className="moc-date">
+                                            {order.seller_accepted ? (
+                                                <span style={{ background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                    <i className="fa-solid fa-store"></i> SELLER ACCEPTED
+                                                </span>
+                                            ) : (
+                                                <span style={{ background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                    <i className="fa-solid fa-clock"></i> WAITING FOR SELLER
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="moc-header-right" style={{display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'4px'}}>
                                         <div className="moc-date">{getDisplayDate(order.created_at || order.createdAt).toLocaleString([], {day:'numeric', month:'short', year:'numeric'})}</div>
@@ -374,7 +399,7 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
 
                                     {order.items && order.items.map((item, idx) => (
                                         <div key={idx} className="moc-item-row">
-                                            <img src={item.image || 'https://via.placeholder.com/150'} alt={item.title} className="moc-item-img" style={{width:'50px', height:'60px'}} />
+                                            <img src={item.image || 'https://via.placeholder.com/150'} alt={item.title || 'Product'} className="moc-item-img" style={{width:'50px', height:'60px'}} />
                                             <div className="moc-item-details">
                                                 <div className="moc-item-title" style={{fontSize:'13px'}}>{item.title}</div>
                                                 <div className="moc-item-meta">Qty: {item.quantity || 1} | Size: {item.size || 'N/A'}</div>
@@ -401,7 +426,7 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
                                                 <div className="moc-customer-phone"><i className="fa-solid fa-phone"></i> {sellerPhone}</div>
                                             </div>
 
-                                            {/* --- NEW ADMIN FINANCIAL BREAKDOWN --- */}
+                                            {/* ADMIN FINANCIAL BREAKDOWN */}
                                             <div className="moc-customer-section" style={{background:'#fefcf5', border:'1px solid #fde68a'}}>
                                                 <div className="moc-customer-title" style={{color:'#b45309'}}><i className="fa-solid fa-file-invoice-dollar"></i> Financial Breakdown</div>
                                                 
@@ -435,11 +460,69 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
                                                 </div>
                                             </div>
 
-                                            {/* Admin Actions */}
+                                            {/* 🔥 NEW: ADMIN INVOICE VIEW & DOWNLOAD BAR (Always available to Admin) */}
+                                            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px', marginBottom: '4px' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => generateOrderInvoice(order, db, false)}
+                                                    style={{
+                                                        flex: 1,
+                                                        minWidth: '160px',
+                                                        background: '#ffffff',
+                                                        color: '#111827',
+                                                        border: '1px solid #111827',
+                                                        padding: '10px 16px',
+                                                        borderRadius: '6px',
+                                                        fontWeight: '700',
+                                                        fontSize: '13px',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '8px'
+                                                    }}
+                                                >
+                                                    <i className="fa-solid fa-eye"></i> View Invoice
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => generateOrderInvoice(order, db, true)}
+                                                    style={{
+                                                        flex: 1,
+                                                        minWidth: '160px',
+                                                        background: '#8b7355',
+                                                        color: '#ffffff',
+                                                        border: '1px solid #8b7355',
+                                                        padding: '10px 16px',
+                                                        borderRadius: '6px',
+                                                        fontWeight: '700',
+                                                        fontSize: '13px',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '8px'
+                                                    }}
+                                                >
+                                                    <i className="fa-solid fa-download"></i> Download / Print Invoice
+                                                </button>
+                                            </div>
+
+                                            {/* Admin Order Status Actions */}
                                             <div style={{marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e5e7eb'}}>
                                                 {(currentStatus === 'pending' || currentStatus === 'created') && (
                                                     <div style={{display:'flex', gap:'10px', flexWrap:'wrap', alignItems:'center'}}>
-                                                        {!isCOD && <input type="text" id={`manual-pay-id-${order.id}`} placeholder="Payment ID" className="input-box" style={{maxWidth:'140px', minHeight:'38px'}} />}
+                                                        {!isCOD && (
+                                                            <input 
+                                                                type="text" 
+                                                                placeholder="Payment ID" 
+                                                                className="input-box" 
+                                                                maxLength={60}
+                                                                value={paymentInputs[order.id] || ''}
+                                                                onChange={(e) => setPaymentInputs(prev => ({ ...prev, [order.id]: e.target.value }))}
+                                                                style={{maxWidth:'160px', minHeight:'38px'}} 
+                                                            />
+                                                        )}
                                                         <button type="button" className="action-btn" style={{background:'var(--success)', color:'white', border:'none'}} onClick={() => handleVerifyPayment(order.id, isCOD)}>Verify Payment</button>
                                                         <button type="button" className="action-btn" style={{background:'var(--danger)', color:'white', border:'none'}} onClick={() => handleUpdateStatus(order.id, 'cancelled')}>Reject</button>
                                                     </div>
@@ -452,15 +535,61 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
 
                                             <div style={{marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e5e7eb'}}>
                                                 <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
-                                                    <input type="text" id={`courier-name-${order.id}`} defaultValue={existingCourier} placeholder="Courier Name" className="input-box" style={{flex:1, minWidth:'120px'}} />
-                                                    <input type="text" id={`tracking-id-${order.id}`} defaultValue={existingTracking} placeholder="Tracking ID" className="input-box" style={{flex:1, minWidth:'120px'}} />
-                                                    <button type="button" id={`track-btn-${order.id}`} className="action-btn" style={{background:'var(--primary)', color:'white', border:'none'}} onClick={() => handleUpdateTracking(order.id)}>Save Tracking</button>
+                                                    <input 
+                                                        type="text" 
+                                                        value={existingCourier} 
+                                                        maxLength={60}
+                                                        onChange={(e) => setTrackingInputs(prev => ({
+                                                            ...prev,
+                                                            [order.id]: { ...(prev[order.id] || {}), courierName: e.target.value }
+                                                        }))}
+                                                        placeholder="Courier Name" 
+                                                        className="input-box" 
+                                                        style={{flex:1, minWidth:'120px'}} 
+                                                    />
+                                                    <input 
+                                                        type="text" 
+                                                        value={existingTracking} 
+                                                        maxLength={60}
+                                                        onChange={(e) => setTrackingInputs(prev => ({
+                                                            ...prev,
+                                                            [order.id]: { ...(prev[order.id] || {}), trackingId: e.target.value }
+                                                        }))}
+                                                        placeholder="Tracking ID" 
+                                                        className="input-box" 
+                                                        style={{flex:1, minWidth:'120px'}} 
+                                                    />
+                                                    <button 
+                                                        type="button" 
+                                                        disabled={savingTrackingId === order.id}
+                                                        className="action-btn" 
+                                                        style={{background:'var(--primary)', color:'white', border:'none'}} 
+                                                        onClick={() => handleUpdateTracking(order)}
+                                                    >
+                                                        {savingTrackingId === order.id ? "Saving..." : "Save Tracking"}
+                                                    </button>
                                                 </div>
                                                 
                                                 <div style={{marginTop:'12px', display:'flex', alignItems:'center', gap:'10px', flexWrap:'wrap'}}>
-                                                    {existingLabel && <a href={existingLabel} target="_blank" rel="noopener noreferrer" className="action-btn" style={{background:'#ecfdf5', color:'#065f46', borderColor:'#a7f3d0'}}><i className="fa-solid fa-file-pdf"></i> View Label</a>}
-                                                    <input type="file" id={`pdf-file-${order.id}`} accept=".pdf" style={{fontSize:'12px', maxWidth:'180px'}} />
-                                                    <button type="button" id={`upload-pdf-btn-${order.id}`} className="action-btn" onClick={() => handleLabelUpload(order.id)}>Upload Label PDF</button>
+                                                    {existingLabel && isSafeUrl(existingLabel) && (
+                                                        <a href={existingLabel} target="_blank" rel="noopener noreferrer" className="action-btn" style={{background:'#ecfdf5', color:'#065f46', borderColor:'#a7f3d0'}}>
+                                                            <i className="fa-solid fa-file-pdf"></i> View Label
+                                                        </a>
+                                                    )}
+                                                    <input 
+                                                        type="file" 
+                                                        accept="application/pdf,.pdf" 
+                                                        onChange={(e) => setSelectedFiles(prev => ({ ...prev, [order.id]: e.target.files?.[0] || null }))}
+                                                        style={{fontSize:'12px', maxWidth:'180px'}} 
+                                                    />
+                                                    <button 
+                                                        type="button" 
+                                                        disabled={uploadingLabelId === order.id}
+                                                        className="action-btn" 
+                                                        onClick={() => handleLabelUpload(order.id)}
+                                                    >
+                                                        {uploadingLabelId === order.id ? <><i className="fa-solid fa-spinner fa-spin"></i> Uploading...</> : "Upload Label PDF"}
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>

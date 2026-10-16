@@ -1,19 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { API_BASE_URL } from '../apiConfig.js';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, updateDoc, setDoc, query, where } from 'firebase/firestore';
 import './SellerStorefrontEditor.css';
 
-// 🔥 FIXED: Completely removed Firebase Auth. The editor now relies entirely on the passed emails and hardcoded key.
 export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, onBackToAdmin, getAuthHeaders }) {
     
-    // 🔥 The editor safely resolves the email from either the Admin Tab or Seller Tab
     const targetEmail = adminSellerEmail || sellerEmail;
 
     const [isSaving, setIsSaving] = useState(false);
     const [uploadingTarget, setUploadingTarget] = useState(null);
 
     const [brandName, setBrandName] = useState('');
+    const [vanityHandle, setVanityHandle] = useState(''); // 🔥 NEW: URL Handle State
     const [brandLogo, setBrandLogo] = useState('');
     const [brandColor, setBrandColor] = useState('#000000');
     const [headerType, setHeaderType] = useState('text'); 
@@ -38,6 +36,7 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
             if (snap.exists() && snap.data().storefront) {
                 const sf = snap.data().storefront;
                 setBrandName(sf.brandName || '');
+                setVanityHandle(sf.vanityHandle || ''); // 🔥 NEW: Load Handle
                 setBrandLogo(sf.brandLogo || '');
                 setBrandColor(sf.brandColor || '#000000');
                 setHeaderType(sf.headerType || 'text');
@@ -51,80 +50,82 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
                 const cats = [];
                 catSnap.forEach(d => cats.push({ id: d.id, ...d.data() }));
                 setStoreCategories(cats);
-            } catch (err) {}
+            } catch (err) {
+                console.error("Failed to load categories", err);
+            }
 
             setIsLoadingProducts(true);
             try {
-                const productSnap = await getDocs(collection(db, "products"));
-                const loadedProducts = [];
-                
-                const currentBrandName = snap.exists() ? (snap.data().profile?.brandName || snap.data().storefront?.brandName) : null;
+                const q1 = query(collection(db, "products"), where("sellerEmail", "==", targetEmail));
+                const q2 = query(collection(db, "products"), where("email", "==", targetEmail)); 
 
-                productSnap.forEach(d => {
+                const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+                const loadedProductsMap = new Map();
+
+                const processDoc = (d) => {
                     const p = d.data();
                     let imgUrl = "https://via.placeholder.com/150";
                     if (p.images && p.images.length > 0) imgUrl = p.images[0];
                     else if (typeof p.image === 'string') imgUrl = p.image;
                     else if (typeof p.imageUrl === 'string') imgUrl = p.imageUrl;
 
-                    const pEmail = p.sellerEmail || p.seller_email || p.email;
-                    const pBrand = p.brandName || p.brand_name || p.brand;
-                    
-                    const isMyProduct = !adminSellerEmail || 
-                                        pEmail === targetEmail || 
-                                        (currentBrandName && pBrand === currentBrandName);
+                    loadedProductsMap.set(d.id, {
+                        id: d.id, 
+                        name: p.title || p.name || 'Untitled Product', 
+                        price: p.selling_price || p.price || 0, 
+                        image: imgUrl
+                    });
+                };
 
-                    if (isMyProduct) {
-                        loadedProducts.push({
-                            id: d.id, name: p.title || p.name || 'Untitled Product', price: p.selling_price || p.price || 0, image: imgUrl
-                        });
-                    }
-                });
-                setMyProducts(loadedProducts);
-            } catch (err) {} 
-            finally { setIsLoadingProducts(false); }
+                snap1.forEach(processDoc);
+                snap2.forEach(processDoc);
+                
+                setMyProducts(Array.from(loadedProductsMap.values()));
+            } catch (err) {
+                console.error("Failed to load products securely", err);
+            } 
+            finally { 
+                setIsLoadingProducts(false); 
+            }
         };
         loadData();
     }, [targetEmail]);
 
     const genId = () => Math.random().toString(36).substr(2, 9);
 
-    // Save with the Firebase ID token supplied by the authenticated admin layout.
     const saveStorefront = async () => {
         if (!targetEmail) {
             alert("Error: Target seller email is missing.");
             return;
         }
-        if (typeof getAuthHeaders !== "function") {
-            alert("Error: Admin authentication is unavailable. Refresh the page and sign in again.");
-            return;
-        }
 
         setIsSaving(true);
         try {
-            const headers = await getAuthHeaders();
+            const profileRef = doc(db, "seller_profiles", targetEmail);
+            const docSnap = await getDoc(profileRef);
+
+            // 🔥 NEW: Save the sanitized URL handle to the database
             const payload = {
                 storefront: {
-                    brandName, brandLogo, brandColor, headerType, headerBanner,
-                    modules, pages: customPages, updatedAt: new Date().toISOString()
+                    brandName: (brandName || '').trim().substring(0, 50), 
+                    vanityHandle: (vanityHandle || '').toLowerCase().replace(/[^a-z0-9-]/g, ''), 
+                    brandLogo, 
+                    brandColor, 
+                    headerType, 
+                    headerBanner,
+                    modules, 
+                    pages: customPages, 
+                    updatedAt: new Date().toISOString()
                 }
             };
 
-            const apiUrl = API_BASE_URL.replace(/\/+$/, "");
-            if (!apiUrl) {
-                throw new Error("Render API base URL is missing in src/apiConfig.js.");
+            if (docSnap.exists()) {
+                await updateDoc(profileRef, payload);
+            } else {
+                await setDoc(profileRef, payload);
             }
 
-            const response = await fetch(
-                `${apiUrl}/admin/seller_profiles/${encodeURIComponent(targetEmail)}`,
-                { method: "PUT", headers, body: JSON.stringify(payload) }
-            );
-            const result = await response.json().catch(() => ({}));
-            if (!response.ok) {
-                throw new Error(result.error || `Save failed (HTTP ${response.status}).`);
-            }
-
-            alert(`Storefront updated for ${targetEmail}.`);
+            alert(`Storefront successfully published!`);
         } catch (error) {
             console.error("Storefront save failed:", error);
             alert("Error saving: " + error.message);
@@ -149,6 +150,10 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
     };
 
     const addModule = (type) => {
+        if (modules.length >= 15) {
+            alert("Security Limit: You can only add a maximum of 15 layout modules.");
+            return;
+        }
         const base = { id: genId(), type };
         if (type === 'main_banner') { base.slides = []; base.scrollTime = 10; }
         if (type === 'category_row') { base.heading = ''; base.items = []; }
@@ -157,8 +162,10 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
         if (type === 'small_banner') { base.slides = []; base.scrollTime = 5; }
         setModules([...modules, base]);
     };
+
     const updateModule = (id, key, value) => setModules(modules.map(m => m.id === id ? { ...m, [key]: value } : m));
     const removeModule = (id) => setModules(modules.filter(m => m.id !== id));
+    
     const moveModule = (index, dir) => {
         const target = index + dir;
         if (target < 0 || target >= modules.length) return;
@@ -177,7 +184,18 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
             return { ...m, slides: updatedSlides };
         }));
     };
-    const addBannerSlide = (modId, url, isVideo) => setModules(modules.map(m => m.id === modId ? { ...m, slides: [...(m.slides || []), { url, isVideo, link: '' }] } : m));
+
+    const addBannerSlide = (modId, url, isVideo) => setModules(modules.map(m => {
+        if (m.id === modId) {
+            if (m.slides?.length >= 6) {
+                alert("Limit reached: Maximum 6 slides allowed per banner.");
+                return m;
+            }
+            return { ...m, slides: [...(m.slides || []), { url, isVideo, link: '' }] };
+        }
+        return m;
+    }));
+
     const removeBannerSlide = (modId, slideIndex) => setModules(modules.map(m => {
         if (m.id !== modId) return m;
         const updatedSlides = [...m.slides];
@@ -185,11 +203,26 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
         return { ...m, slides: updatedSlides };
     }));
 
-    const addCategoryItem = (modId, url, shape) => setModules(modules.map(m => m.id === modId ? { ...m, items: [...(m.items || []), { id: genId(), image: url, text: 'Item', shape }] } : m));
+    const addCategoryItem = (modId, url, shape) => setModules(modules.map(m => {
+        if (m.id === modId) {
+            if (m.items?.length >= 8) {
+                alert("Limit reached: Maximum 8 categories allowed per row.");
+                return m;
+            }
+            return { ...m, items: [...(m.items || []), { id: genId(), image: url, text: 'Item', shape }] };
+        }
+        return m;
+    }));
+
     const removeCategoryItem = (modId, itemId) => setModules(modules.map(m => m.id === modId ? { ...m, items: m.items.filter(i => i.id !== itemId) } : m));
+    
     const updateCategoryItem = (modId, itemId, text) => setModules(modules.map(m => m.id === modId ? { ...m, items: m.items.map(i => i.id === itemId ? { ...i, text } : i) } : m));
 
     const createNewPage = () => {
+        if (customPages.length >= 10) {
+            alert("Security Limit: You can only create a maximum of 10 custom pages.");
+            return;
+        }
         const newPage = { id: genId(), title: 'New Page', products: [] };
         setCustomPages([...customPages, newPage]);
         setEditingPageId(newPage.id);
@@ -197,7 +230,7 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
     };
     
     const updatePageTitle = (title) => {
-        setCustomPages(customPages.map(p => p.id === editingPageId ? { ...p, title } : p));
+        setCustomPages(customPages.map(p => p.id === editingPageId ? { ...p, title: title.substring(0, 30) } : p));
     };
 
     const deletePage = (id) => {
@@ -216,7 +249,11 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
 
     const addProductToTarget = (product) => {
         if (activeTab === 'edit-page') {
-            setCustomPages(customPages.map(p => p.id === editingPageId ? { ...p, products: [...p.products, product] } : p));
+            setCustomPages(customPages.map(p => {
+                if (p.id !== editingPageId) return p;
+                if (p.products?.length >= 50) { alert("Limit: Maximum 50 products per page."); return p; }
+                return { ...p, products: [...p.products, product] };
+            }));
         } else {
             setModules(modules.map(m => {
                 if (m.id !== activeTargetModule) return m;
@@ -348,6 +385,20 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
                                     </label>
                                 </div>
                             )}
+
+                            {/* 🔥 NEW: URL Handle Input Box */}
+                            <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: '#f9fafb', padding: '8px 16px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                                <i className="fa-solid fa-link" style={{ color: '#9ca3af' }}></i>
+                                <span style={{ fontSize: '13px', color: '#6b7280' }}>/shop/</span>
+                                <input 
+                                    type="text" 
+                                    placeholder="your-brand" 
+                                    value={vanityHandle} 
+                                    onChange={(e) => setVanityHandle(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                                    style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '13px', color: '#111827', fontWeight: '600', width: '120px' }}
+                                    title="Only lowercase letters, numbers, and hyphens allowed."
+                                />
+                            </div>
 
                             <span className="official-store-badge">OFFICIAL STORE</span>
                         </div>
