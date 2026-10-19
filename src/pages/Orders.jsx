@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore'; 
+
+// Import secure generator and database connection
 import { auth, db } from '../firebase'; 
+import { generateOrderInvoice } from '../utils/invoiceGenerator';
 import './Orders.css';
 
 export default function Orders() {
@@ -43,11 +46,9 @@ export default function Orders() {
       const reviewsMap = {};
       querySnapshot.docs.forEach(doc => {
         const data = doc.data();
-        // Map by Order ID AND Product ID to prevent cross-order duplication
         if (data.orderId) {
             reviewsMap[`${data.orderId}_${data.productId}`] = data; 
         } else {
-            // Fallback for older reviews that didn't have an orderId attached
             reviewsMap[data.productId] = data;
         }
       });
@@ -189,7 +190,6 @@ export default function Orders() {
     const uploadPromises = files.map(async (file) => {
       const formData = new FormData();
       formData.append('file', file);
-      // SECURED: Cloudinary variables loaded from .env
       formData.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET); 
 
       try {
@@ -225,8 +225,8 @@ export default function Orders() {
       const reviewData = {
         productId: productToReview.id,
         orderId: productToReview.orderId, 
-        sellerEmail: productToReview.sellerEmail || "", // 🔥 Correctly attached to Seller
-        brandName: productToReview.brandName || "JAMBAWEAR", // 🔥 Saving Brand context
+        sellerEmail: productToReview.sellerEmail || "", 
+        brandName: productToReview.brandName || "JAMBAWEAR", 
         sellerId: productToReview.sellerId || "JAMBA_DIRECT", 
         userId: currentUser.uid,
         userName: currentUser.displayName || "Jamba Customer",
@@ -393,6 +393,22 @@ export default function Orders() {
                     </div>
                   </div>
                 </div>
+
+                {/* --- CUSTOMER INVOICE GENERATOR (LOCKED BEHIND DELIVERY STATUS) --- */}
+                {status === 'delivered' ? (
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '20px' }}>
+                        <button type="button" onClick={() => generateOrderInvoice(order, db, false)} style={{ flex: 1, minWidth: '160px', background: '#ffffff', color: '#111827', border: '1px solid #111827', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                            <i className="fa-solid fa-eye"></i> View Invoice
+                        </button>
+                        <button type="button" onClick={() => generateOrderInvoice(order, db, true)} style={{ flex: 1, minWidth: '160px', background: '#8b7355', color: '#ffffff', border: '1px solid #8b7355', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                            <i className="fa-solid fa-download"></i> Download Invoice
+                        </button>
+                    </div>
+                ) : (
+                    <div style={{ marginTop: '20px', padding: '12px', background: '#f3f4f6', borderRadius: '6px', fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <i className="fa-solid fa-lock"></i> Invoice will be available to download once the order is delivered.
+                    </div>
+                )}
               </div>
             )}
 
@@ -401,7 +417,6 @@ export default function Orders() {
               <span className="total-amount">₹{finalTotal.toLocaleString('en-IN')}</span>
             </div>
 
-            {/* --- REVIEWS AT THE VERY BOTTOM (ONLY VISIBLE IF EXPANDED) --- */}
             {isExpanded && status === 'delivered' && (
               <div className="expanded-reviews-container fade-in" style={{ marginTop: '24px' }}>
                 {order.items.map((item, index) => {
@@ -440,7 +455,6 @@ export default function Orders() {
                       ) : (
                         <div className="customer-past-review" style={{ margin: 0, width: '100%', maxWidth: '400px', boxSizing: 'border-box' }}>
                           
-                          {/* Optional context if multiple items in order */}
                           {order.items.length > 1 && (
                             <p style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', color: '#111827' }}>
                               Review for {item.title}
@@ -485,7 +499,6 @@ export default function Orders() {
         );
       })}
 
-      {/* --- REVIEW MODAL OVERLAY --- */}
       {isReviewModalOpen && productToReview && (
         <div className="review-modal-overlay" onClick={closeReviewModal}>
           <div className="review-modal-content" onClick={(e) => e.stopPropagation()}>

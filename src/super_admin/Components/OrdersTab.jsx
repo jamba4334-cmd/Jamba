@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from "../../apiConfig.js"; 
 import "../styles/Orders.css";
 
+// IMPORT DATABASE AND SECURE INVOICE GENERATOR ENGINE
+import { db } from '../../firebase';
+import { generateOrderInvoice } from '../../utils/invoiceGenerator';
+
 export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refreshOrders }) {
     // Local React State for this tab
     const [orderFilterStatus, setOrderFilterStatus] = useState('all');
@@ -245,7 +249,6 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
                     />
                 </div>
 
-                {/* RESTORED: THE DATE DROPDOWN */}
                 <div className="orders-filter-wrapper">
                     <div className="custom-filter-dropdown" style={{ minWidth: '180px' }}>
                         <div 
@@ -278,7 +281,6 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
                 </div>
             </div>
 
-            {/* STATUS FILTER BUTTONS */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid #f3f4f6', paddingBottom: '16px', overflowX: 'auto', whiteSpace: 'nowrap' }}>
                 <span style={{fontWeight: 'bold', marginRight: '8px', color: 'var(--text-muted)', alignSelf: 'center', minWidth: '55px'}}>Status:</span>
                 <button type="button" className={`filter-btn ${orderFilterStatus === 'all' ? 'active' : ''}`} onClick={() => setOrderFilterStatus('all')}>All Orders</button>
@@ -338,14 +340,12 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
                         const existingTracking = order.trackingId || '';
                         const existingLabel = order.shipping_label_url || order.shippingLabel || '';
 
-                        // --- NEW: DYNAMIC FINANCIAL MATH FOR ADMIN ---
                         const baseSubtotal = Number(order.subtotal || order.items.reduce((sum, item) => sum + ((item.price || item.selling_price || 0) * (item.quantity || 1)), 0));
                         const discountAmount = Number(order.discount_applied || 0);
                         const shippingFee = Number(order.shipping_fee || (baseSubtotal < 1999 ? 149 : 0));
                         const finalTotal = Number(order.total || Math.max(baseSubtotal - discountAmount + shippingFee, 0));
                         const totalGst = Number(order.total_gst || 0);
 
-                        // Robust Date display for the header
                         const getDisplayDate = (dateVal) => {
                             if (!dateVal) return new Date();
                             if (typeof dateVal.toDate === 'function') return dateVal.toDate();
@@ -401,7 +401,6 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
                                                 <div className="moc-customer-phone"><i className="fa-solid fa-phone"></i> {sellerPhone}</div>
                                             </div>
 
-                                            {/* --- NEW ADMIN FINANCIAL BREAKDOWN --- */}
                                             <div className="moc-customer-section" style={{background:'#fefcf5', border:'1px solid #fde68a'}}>
                                                 <div className="moc-customer-title" style={{color:'#b45309'}}><i className="fa-solid fa-file-invoice-dollar"></i> Financial Breakdown</div>
                                                 
@@ -433,6 +432,24 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
                                                     <span>Customer Paid Amount</span>
                                                     <span>₹{finalTotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                                                 </div>
+                                            </div>
+
+                                            {/* INVOICE VIEW / PRINT BUTTONS FOR ADMIN */}
+                                            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px', marginBottom: '16px' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => generateOrderInvoice(order, db, false)}
+                                                    style={{ flex: 1, minWidth: '160px', background: '#ffffff', color: '#111827', border: '1px solid #111827', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                                                >
+                                                    <i className="fa-solid fa-eye"></i> View Invoice
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => generateOrderInvoice(order, db, true)}
+                                                    style={{ flex: 1, minWidth: '160px', background: '#8b7355', color: '#ffffff', border: '1px solid #8b7355', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                                                >
+                                                    <i className="fa-solid fa-download"></i> Download / Print
+                                                </button>
                                             </div>
 
                                             {/* Admin Actions */}

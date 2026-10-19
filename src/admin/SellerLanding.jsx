@@ -7,7 +7,6 @@ import { setDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { createClient } from '@supabase/supabase-js';
 
-// Safe initialization prevents module crashes if .env keys are missing
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
@@ -29,7 +28,7 @@ export default function SellerLanding() {
     const [formData, setFormData] = useState({
         ownerName: '',
         brandName: '',
-        email: '', // Will be strictly populated by Google Auth
+        email: '',
         phone: '',
         whatsapp: '',
         hasGst: 'yes',
@@ -52,7 +51,6 @@ export default function SellerLanding() {
         setFormStep(2);
     };
 
-    // 🔥 SECURE ONBOARDING PIPELINE
     const handleSecureAuth = async () => {
         setIsLoggingIn(true);
         setLoginError("");
@@ -63,7 +61,6 @@ export default function SellerLanding() {
             const result = await signInWithPopup(auth, provider);
             const userEmail = result.user.email.toLowerCase();
 
-            // 1. Check if already an authorized active seller
             const approvedRef = doc(db, "authorized_sellers", userEmail);
             const approvedSnap = await getDoc(approvedRef);
             if (approvedSnap.exists()) {
@@ -71,7 +68,6 @@ export default function SellerLanding() {
                 return;
             }
 
-            // 2. Check if application is already pending
             const appRef = doc(db, "seller_applications", userEmail);
             const appSnap = await getDoc(appRef);
             if (appSnap.exists()) {
@@ -82,7 +78,6 @@ export default function SellerLanding() {
                 }
             }
 
-            // 3. New Application: Lock in their verified Google email and show form
             setFormData(prev => ({ ...prev, email: userEmail }));
             setShowForm(true);
 
@@ -151,7 +146,6 @@ export default function SellerLanding() {
         setAuthError("");
 
         try {
-            // Re-verify auth state before database hit
             const auth = getAuth();
             if (!auth.currentUser) {
                 throw new Error("Your secure session expired. Please log in again.");

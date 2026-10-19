@@ -2,14 +2,14 @@ import React, { useState, useEffect } from "react";
 import { API_BASE_URL } from "../../apiConfig.js"; 
 import "../styles/Sellers.css";
 
-// ⚠️ ADJUST THIS RELATIVE PATH IF YOUR FIREBASE FILE IS LOCATED ELSEWHERE
-import { db } from '../../firebase'; 
-import { collection, query, where, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, setDoc , serverTimestamp } from "firebase/firestore";
+import { getAuth } from 'firebase/auth';
 
 // ⚠️ ADJUST THIS RELATIVE PATH TO POINT TO YOUR EDITOR COMPONENT
 import SellerStorefrontEditor from '../../admin/SellerStorefrontEditor'; 
 
-export default function SellersTab({ getAuthHeaders, globalSellers = [], liveProducts = [], orders = [], loadAuthorizedSellers }) {
+// 🔥 FIX: Added 'db' back as a prop so it uses the Secure Admin Connection!
+export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liveProducts = [], orders = [], loadAuthorizedSellers }) {
     // --- State Management ---
     const [mainViewTab, setMainViewTab] = useState("directory"); 
 
@@ -124,7 +124,13 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
             });
             
             // 2. Mark the application as approved
-            await updateDoc(doc(db, "seller_applications", app.id), { status: "approved" });
+            await updateDoc(doc(db, "seller_applications", app.id), {
+                status: "approved",
+                approvedAt: serverTimestamp(),
+                reviewedBy: getAuth().currentUser?.email || null,
+                rejectionReason: null,
+                rejectedAt: null
+            });
             
             // 3. Keep backend logic running in a non-blocking way
             try {
@@ -143,16 +149,35 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
             if (typeof loadAuthorizedSellers === 'function') loadAuthorizedSellers(); 
         } catch (error) {
             console.error("Error approving seller:", error);
-            alert(`Approval Failed: ${error.message}`);
+            if (error && error.code === "permission-denied") {
+                const signedInAs = getAuth().currentUser?.email || "an unknown account";
+                alert(`Approval Failed: the database blocked this action.\n\nYou are signed in as: ${signedInAs}\n\nSign out and sign back in with the admin account (jamba4334@gmail.com), and make sure the latest Firestore rules are published in the Firebase Console.`);
+            } else {
+                alert(`Approval Failed: ${error.message}`);
+            }
         }
     };
 
     const handleRejectApplication = async (appId) => {
-        if (!window.confirm("Are you sure you want to reject this application?")) return;
+        const reason = window.prompt(
+            "Reason for rejection (the seller will see this).\nExamples: Invalid IFSC code, Blurry GST certificate, PAN does not match name",
+            ""
+        );
+        if (reason === null) return; // cancelled
+        const cleanReason = reason.trim().slice(0, 300);
+        if (cleanReason.length < 3) {
+            alert("Please enter a short reason so the seller knows what to fix.");
+            return;
+        }
         try {
-            await updateDoc(doc(db, "seller_applications", appId), { status: "rejected" });
+            await updateDoc(doc(db, "seller_applications", appId), {
+                status: "rejected",
+                rejectionReason: cleanReason,
+                rejectedAt: serverTimestamp(),
+                reviewedBy: getAuth().currentUser?.email || null
+            });
             fetchApplications();
-            if (window.showToast) window.showToast("Application rejected.");
+            if (window.showToast) window.showToast("Application rejected. Seller can re-apply after 24 hours.");
         } catch (error) {
             console.error("Error rejecting application:", error);
             alert(`Rejection Failed: ${error.message}`);
@@ -296,7 +321,6 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
         <div className="content-section active sellers-container">
             <span className="section-title" style={{ marginBottom: '16px', display: 'block' }}>Seller Directory</span>
             
-            {/* 🔥 THREE TABS NAV 🔥 */}
             <div className="seller-sub-nav">
                 <button 
                     type="button"
@@ -394,7 +418,7 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                 </>
             )}
 
-            {/* 🔥 TAB 2: PENDING ONBOARDING QUEUE (UPDATED UI) 🔥 */}
+            {/* TAB 2: PENDING ONBOARDING QUEUE */}
             {mainViewTab === "onboarding" && (
                 <div className="card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -428,7 +452,6 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                                 <tbody>
                                     {pendingApplications.map(app => (
                                         <tr key={app.id} style={{ borderBottom: '1px solid #e5e7eb', fontSize: '14px' }}>
-                                            {/* 1. Brand & Contact */}
                                             <td style={{ padding: '16px' }}>
                                                 <div style={{ fontWeight: '700', color: '#111827', fontSize: '15px' }}>{app.brandName}</div>
                                                 <div style={{ color: '#4b5563', fontSize: '13px', marginBottom: '6px' }}>{app.ownerName}</div>
@@ -440,7 +463,6 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                                                 </div>
                                             </td>
 
-                                            {/* 2. GST Status */}
                                             <td style={{ padding: '16px' }}>
                                                 <span style={{ 
                                                     background: app.kycData?.hasGst ? '#dcfce7' : '#fef3c7', 
@@ -455,14 +477,12 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                                                 </div>
                                             </td>
 
-                                            {/* 3. Banking & PAN */}
                                             <td style={{ padding: '16px', fontSize: '13px', color: '#374151', lineHeight: '1.6' }}>
                                                 <div><strong style={{ color: '#111827' }}>PAN:</strong> {app.kycData?.panNumber || 'N/A'}</div>
                                                 <div><strong style={{ color: '#111827' }}>A/C:</strong> {app.kycData?.accountNumber || 'N/A'}</div>
                                                 <div><strong style={{ color: '#111827' }}>IFSC:</strong> {app.kycData?.ifscCode || 'N/A'}</div>
                                             </td>
 
-                                            {/* 4. Document Links */}
                                             <td style={{ padding: '16px' }}>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                                     {app.kycData?.gstPdfUrl && (
@@ -483,7 +503,6 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                                                 </div>
                                             </td>
 
-                                            {/* 5. Actions */}
                                             <td style={{ padding: '16px', verticalAlign: 'middle', textAlign: 'right' }}>
                                                 <button onClick={() => handleApproveApplication(app)} style={{ background: '#10b981', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', width: '100%', marginBottom: '8px', display: 'flex', justifyContent: 'center', gap: '6px', alignItems: 'center' }}>
                                                     <i className="fa-solid fa-check"></i> Approve
@@ -507,6 +526,7 @@ export default function SellersTab({ getAuthHeaders, globalSellers = [], livePro
                     
                     {editingSellerEmail ? (
                         <SellerStorefrontEditor 
+                            db={db}
                             adminSellerEmail={editingSellerEmail} 
                             onBackToAdmin={() => setEditingSellerEmail(null)} 
                             getAuthHeaders={getAuthHeaders} 

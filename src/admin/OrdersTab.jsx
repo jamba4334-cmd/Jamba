@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import './OrdersTab.css';
 
+// Import secure generator and database connection
+import { db } from '../firebase';
+import { generateOrderInvoice } from '../utils/invoiceGenerator';
+
 export default function OrdersTab({ isActive, sellerOrders, loadingData, acceptOrder }) {
     const [expandedOrders, setExpandedOrders] = useState({});
     const [orderSearchTerm, setOrderSearchTerm] = useState("");
@@ -24,10 +28,8 @@ export default function OrdersTab({ isActive, sellerOrders, loadingData, acceptO
         }));
     };
 
-    // --- NEW: Advanced Date Filtration & "Latest First" Sorting --- //
     const processedOrders = sellerOrders
         .filter(order => {
-            // 1. Search Filter
             const searchLower = orderSearchTerm.toLowerCase();
             const customerName = (order.shippingAddress?.name || 'Guest Customer').toLowerCase();
             const customerPhone = (order.shippingAddress?.phone || order.customerContact || '').toLowerCase();
@@ -35,17 +37,12 @@ export default function OrdersTab({ isActive, sellerOrders, loadingData, acceptO
             
             const matchesSearch = orderId.includes(searchLower) || customerName.includes(searchLower) || customerPhone.includes(searchLower);
 
-            // 2. Advanced Date Filter
             let matchesDate = true;
             if (orderDateRange !== "all") {
                 const orderDate = new Date(order.created_at || order.createdAt || 0);
                 const today = new Date();
-                
-                // Helper to strip time for exact day comparisons
                 const getStartOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-                
                 const startOfToday = getStartOfDay(today);
-                
                 const startOfYesterday = new Date(startOfToday);
                 startOfYesterday.setDate(startOfYesterday.getDate() - 1);
                 
@@ -69,7 +66,6 @@ export default function OrdersTab({ isActive, sellerOrders, loadingData, acceptO
             return matchesSearch && matchesDate;
         })
         .sort((a, b) => {
-            // 3. Sort logic: Forces the newest orders to the top
             const dateA = new Date(a.created_at || a.createdAt || 0);
             const dateB = new Date(b.created_at || b.createdAt || 0);
             return dateB - dateA; 
@@ -78,9 +74,7 @@ export default function OrdersTab({ isActive, sellerOrders, loadingData, acceptO
     return (
         <div id="orders" className={`content-section ${isActive ? 'active' : ''}`}>
             
-            {/* ORDERS CONTROL BAR */}
             <div className="orders-controls-bar">
-                
                 <div className="orders-search-wrapper">
                     <div className="search-container">
                         <i className="fa-solid fa-search"></i>
@@ -123,7 +117,6 @@ export default function OrdersTab({ isActive, sellerOrders, loadingData, acceptO
                         )}
                     </div>
                 </div>
-
             </div>
 
             {loadingData ? (
@@ -154,9 +147,7 @@ export default function OrdersTab({ isActive, sellerOrders, loadingData, acceptO
                         ? `${order.shippingAddress.address1}${order.shippingAddress.landmark ? `, ${order.shippingAddress.landmark}` : ''}, ${order.shippingAddress.district}, ${order.shippingAddress.state} - ${order.shippingAddress.pincode}` 
                         : 'No shipping address provided by customer';
 
-                    // --- DYNAMIC FINANCIAL MATH ---
                     const baseSubtotal = Number(order.sellerSubtotal || order.items.reduce((sum, item) => sum + ((item.price || item.selling_price || 0) * (item.quantity || 1)), 0));
-                    
                     const discountAmount = order.promo_creator_role === 'seller' ? Number(order.discount_applied || 0) : 0;
                     const finalSellerTotal = Math.max(baseSubtotal - discountAmount, 0);
 
@@ -204,21 +195,40 @@ export default function OrdersTab({ isActive, sellerOrders, loadingData, acceptO
                                 </div>
 
                                 {expandedOrders[order.id] && (
-                                    <div className="moc-price-breakdown fade-in">
-                                        <div className="moc-pb-title">Price Breakdown</div>
-                                        <div className="moc-pb-row"><span>Subtotal</span><span>₹{baseSubtotal.toLocaleString('en-IN')}</span></div>
-                                        
-                                        {/* --- DISCOUNT DEDUCTION ROW --- */}
-                                        {discountAmount > 0 && (
-                                            <div className="moc-pb-row" style={{ color: '#059669', fontWeight: '600' }}>
-                                                <span>Discount ({order.promo_used})</span>
-                                                <span>- ₹{discountAmount.toLocaleString('en-IN')}</span>
-                                            </div>
-                                        )}
+                                    <div className="fade-in">
+                                        <div className="moc-price-breakdown">
+                                            <div className="moc-pb-title">Price Breakdown</div>
+                                            <div className="moc-pb-row"><span>Subtotal</span><span>₹{baseSubtotal.toLocaleString('en-IN')}</span></div>
+                                            
+                                            {discountAmount > 0 && (
+                                                <div className="moc-pb-row" style={{ color: '#059669', fontWeight: '600' }}>
+                                                    <span>Discount ({order.promo_used})</span>
+                                                    <span>- ₹{discountAmount.toLocaleString('en-IN')}</span>
+                                                </div>
+                                            )}
 
-                                        <div className="moc-pb-row"><span>Delivery Fee</span><span>FREE</span></div>
-                                        <div className="moc-pb-dashed"></div>
-                                        <div className="moc-pb-row moc-pb-final"><span>Gross Earning Base</span><span>₹{finalSellerTotal.toLocaleString('en-IN')}</span></div>
+                                            <div className="moc-pb-row"><span>Delivery Fee</span><span>FREE</span></div>
+                                            <div className="moc-pb-dashed"></div>
+                                            <div className="moc-pb-row moc-pb-final"><span>Gross Earning Base</span><span>₹{finalSellerTotal.toLocaleString('en-IN')}</span></div>
+                                        </div>
+                                        
+                                        {/* INVOICE VIEW / PRINT BUTTONS FOR SELLER */}
+                                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px', marginBottom: '4px' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => generateOrderInvoice(order, db, false)}
+                                                style={{ flex: 1, minWidth: '160px', background: '#ffffff', color: '#111827', border: '1px solid #111827', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                                            >
+                                                <i className="fa-solid fa-eye"></i> View Invoice
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => generateOrderInvoice(order, db, true)}
+                                                style={{ flex: 1, minWidth: '160px', background: '#8b7355', color: '#ffffff', border: '1px solid #8b7355', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                                            >
+                                                <i className="fa-solid fa-download"></i> Download / Print
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>

@@ -119,11 +119,10 @@ export default function SellerDashboard() {
                     const docRef = doc(db, "authorized_sellers", user.email);
                     const docSnap = await getDoc(docRef);
                     if (!docSnap.exists()) {
-                        await signOut(auth);
-                        setAuthError("Unauthorized: Email not registered.");
-                        setShowLoginOverlay(true);
-                        setIsCheckingAuth(false);
-                        return; 
+                        // Not approved yet: send them to onboarding, which shows
+                        // the application form, "under review", or the rejection notice.
+                        window.location.replace('/sell-with-us');
+                        return;
                     }
                     setAuthError("");
                     setShowLoginOverlay(false);
@@ -154,7 +153,11 @@ export default function SellerDashboard() {
                     setIsCheckingAuth(false);
                 } catch (err) {
                     console.error("Verification failed", err);
-                    setAuthError("Verification failed. Check Firebase Rules.");
+                    if (err && err.code === "permission-denied") {
+                        setAuthError("Verification was blocked by database permissions. Please contact support — this is a configuration issue, not a problem with your account.");
+                    } else {
+                        setAuthError("Verification failed due to a network or server issue. Please try again in a moment.");
+                    }
                     setShowLoginOverlay(true);
                     setIsCheckingAuth(false);
                 }
