@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './SellerLanding.css';
 
 import { db } from '../firebase'; 
 import { setDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { createClient } from '@supabase/supabase-js';
 
-// Safe initialization prevents module crashes if .env keys are missing
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
@@ -26,14 +25,10 @@ export default function SellerLanding() {
     const [isLoggingIn, setIsLoggingIn] = useState(false);
     const [loginError, setLoginError] = useState("");
 
-    // Onboarding state: null | 'pending' | 'rejected'
-    const [appStatus, setAppStatus] = useState(null);
-    const [rejectionInfo, setRejectionInfo] = useState({ reason: '', appData: null });
-
     const [formData, setFormData] = useState({
         ownerName: '',
         brandName: '',
-        email: '', 
+        email: '',
         phone: '',
         whatsapp: '',
         hasGst: 'yes',
@@ -56,62 +51,6 @@ export default function SellerLanding() {
         setFormStep(2);
     };
 
-    // 🔥 SECURE ONBOARDING PIPELINE (NO COOLDOWNS)
-    const routeSeller = useCallback(async (user) => {
-        const userEmail = (user.email || '').toLowerCase();
-        if (!userEmail || !user.emailVerified) {
-            setLoginError("Please sign in with a verified Google account.");
-            return;
-        }
-
-        // 1. Check if already an approved active seller
-        const approvedSnap = await getDoc(doc(db, "authorized_sellers", userEmail));
-        if (approvedSnap.exists()) {
-            navigate('/seller');
-            return;
-        }
-
-        // 2. Check application status
-        const appSnap = await getDoc(doc(db, "seller_applications", userEmail));
-        if (appSnap.exists()) {
-            const appData = appSnap.data();
-
-            if (appData.status === "rejected") {
-                // Application rejected: Show reason and allow IMMEDIATE re-application
-                setRejectionInfo({ 
-                    reason: appData.rejectionReason || '', 
-                    appData: appData 
-                });
-                setFormData(prev => ({ ...prev, email: userEmail }));
-                setAppStatus('rejected');
-                return;
-            }
-
-            // Application is currently under review by Admin (Pending)
-            setFormData(prev => ({ ...prev, email: userEmail, brandName: appData.brandName || '' }));
-            setAppStatus('pending');
-            return;
-        }
-
-        // 3. Brand new seller: Open the application form
-        setFormData(prev => ({ ...prev, email: userEmail }));
-        setAppStatus(null);
-        setShowForm(true);
-    }, [navigate]);
-
-    useEffect(() => {
-        const auth = getAuth();
-        const unsub = onAuthStateChanged(auth, (user) => {
-            if (user) {
-                routeSeller(user).catch((err) => {
-                    console.error("Onboarding check failed:", err);
-                    setLoginError("We couldn't check your application. Please try again.");
-                });
-            }
-        });
-        return () => unsub();
-    }, [routeSeller]);
-
     const handleSecureAuth = async () => {
         setIsLoggingIn(true);
         setLoginError("");
@@ -120,48 +59,34 @@ export default function SellerLanding() {
 
         try {
             const result = await signInWithPopup(auth, provider);
-            await routeSeller(result.user);
+            const userEmail = result.user.email.toLowerCase();
+
+            const approvedRef = doc(db, "authorized_sellers", userEmail);
+            const approvedSnap = await getDoc(approvedRef);
+            if (approvedSnap.exists()) {
+                navigate('/seller'); 
+                return;
+            }
+
+            const appRef = doc(db, "seller_applications", userEmail);
+            const appSnap = await getDoc(appRef);
+            if (appSnap.exists()) {
+                const appData = appSnap.data();
+                if (appData.status === "kyc_submitted" || appData.status === "pending_kyc") {
+                    navigate('/seller/kyc'); 
+                    return;
+                }
+            }
+
+            setFormData(prev => ({ ...prev, email: userEmail }));
+            setShowForm(true);
+
         } catch (error) {
             console.error("Auth Error:", error);
             setLoginError("Google Sign-In failed or was blocked. Verification is required.");
         } finally {
             setIsLoggingIn(false);
         }
-    };
-
-    const handleSignOut = async () => {
-        await getAuth().signOut();
-        setAppStatus(null);
-        setShowForm(false);
-        setRegistrationSuccess(false);
-    };
-
-    // Immediate re-apply (pre-fills previous data so they don't have to re-type everything)
-    const handleReapply = () => {
-        const appData = rejectionInfo.appData || {};
-        const k = appData.kycData || {};
-        
-        setFormData(prev => ({
-            ...prev,
-            ownerName: appData.ownerName || '',
-            brandName: appData.brandName || '',
-            phone: appData.phone || '',
-            whatsapp: appData.whatsapp || '',
-            hasGst: k.hasGst === false ? 'no' : 'yes',
-            gstNumber: k.hasGst ? (k.gstNumber || '') : '',
-            panNumber: k.panNumber || '',
-            ifscCode: k.ifscCode || '',
-            // Clear sensitive fields for re-upload
-            accountNumber: '',
-            gstPdfUrl: '',
-            bankProofUrl: '',
-            maskedAadhaarUrl: ''
-        }));
-        
-        setRejectionInfo({ reason: '', appData: null });
-        setAppStatus(null);
-        setFormStep(1);
-        setShowForm(true);
     };
 
     const handleSupabaseFileUpload = async (e, fieldName) => {
@@ -226,10 +151,7 @@ export default function SellerLanding() {
                 throw new Error("Your secure session expired. Please log in again.");
             }
 
-            const targetEmail = (auth.currentUser.email || '').toLowerCase().trim();
-            if (!targetEmail || targetEmail !== formData.email.toLowerCase().trim()) {
-                throw new Error("Your signed-in account changed. Please sign in again.");
-            }
+            const targetEmail = formData.email.toLowerCase().trim();
             const isGstRegistered = formData.hasGst === 'yes';
             
             await setDoc(doc(db, "seller_applications", targetEmail), {
@@ -256,64 +178,12 @@ export default function SellerLanding() {
 
             setIsSubmitting(false);
             setRegistrationSuccess(true);
-            setAppStatus('pending');
         } catch (error) {
             setIsSubmitting(false);
             setAuthError(error?.message || "Permission Denied: Could not connect to the secured database.");
         }
     };
 
-    // 🔥 REJECTED STATE UI (Centered Layout with NO Cooldown)
-    if (appStatus === 'rejected' && !showForm) {
-        return (
-            <div className="seller-form-page">
-                <div className="seller-form-card" style={{ width: '100%', maxWidth: '480px', margin: '0 auto', padding: '48px 32px', textAlign: 'center' }}>
-                    <div className="success-medallion" style={{ margin: '0 auto 24px', borderColor: '#f87171', background: '#fef2f2' }}>
-                        <i className="fa-solid fa-circle-xmark" style={{ fontSize: '32px', color: '#dc2626' }}></i>
-                    </div>
-                    <h2 style={{ fontSize: '1.5rem', marginBottom: '12px', color: 'var(--ws-ink)' }}>Application Not Approved</h2>
-                    <p style={{ color: 'var(--ws-body)', marginBottom: '24px' }}>Your seller application for <strong>{formData.email}</strong> was not approved.</p>
-                    
-                    {rejectionInfo.reason && (
-                        <p style={{ fontSize: '0.9rem', background: '#fef2f2', color: '#991b1b', padding: '16px', borderRadius: '8px', border: '1px solid #fecaca', textAlign: 'left', lineHeight: '1.6', margin: '0 0 32px' }}>
-                            <strong>Reason:</strong> {rejectionInfo.reason}
-                        </p>
-                    )}
-                    
-                    <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
-                        <button className="seller-btn-primary" onClick={handleReapply}>
-                            Re-apply Now
-                        </button>
-                        <button className="seller-btn-ghost" onClick={handleSignOut}>Sign Out</button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    // 🔥 PENDING STATE UI (Centered Layout)
-    if (appStatus === 'pending' && !showForm) {
-        return (
-            <div className="seller-form-page">
-                <div className="seller-form-card" style={{ width: '100%', maxWidth: '480px', margin: '0 auto', padding: '48px 32px', textAlign: 'center' }}>
-                    <div className="success-medallion" style={{ margin: '0 auto 24px' }}>
-                        <i className="fa-solid fa-hourglass-half" style={{ fontSize: '32px', color: 'var(--ws-brown)' }}></i>
-                    </div>
-                    <h2 style={{ fontSize: '1.5rem', marginBottom: '12px', color: 'var(--ws-ink)' }}>Application Under Review</h2>
-                    <p style={{ color: 'var(--ws-body)', marginBottom: '24px' }}>Your application{formData.brandName ? <> for <strong>{formData.brandName}</strong></> : null} is with our admin team.</p>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--ws-body)', background: 'var(--ws-muted)', padding: '16px', borderRadius: '8px', lineHeight: '1.6', margin: '0 0 32px' }}>
-                        Review usually takes 24-48 hours. Once approved, sign in again and you'll go straight to your Seller Dashboard.
-                    </p>
-                    <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
-                        <button className="seller-btn-primary" onClick={() => navigate('/')}>Return Home</button>
-                        <button className="seller-btn-ghost" onClick={handleSignOut}>Sign Out</button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    // 🔥 APPLICATION FORM UI
     if (showForm) {
         return (
             <div className="seller-form-page">
@@ -341,11 +211,6 @@ export default function SellerLanding() {
                                 </div>
 
                                 <div className="seller-form-body">
-                                    {rejectionInfo.reason && (
-                                        <div style={{ background: '#faf0ed', color: '#b4544a', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '12px' }}>
-                                            <i className="fa-solid fa-circle-info"></i> Re-application. Last time's reason: {rejectionInfo.reason}. Please review your documents.
-                                        </div>
-                                    )}
                                     {authError && (
                                         <div className="auth-error">
                                             <i className="fa-solid fa-circle-exclamation"></i> {authError}
@@ -479,19 +344,18 @@ export default function SellerLanding() {
                                 </div>
                             </>
                         ) : (
-                            // 🔥 SUCCESS STATE UI (Fixed Layout)
-                            <div style={{ padding: '48px 32px', textAlign: 'center' }}>
-                                <div className="success-medallion" style={{ margin: '0 auto 24px' }}>
+                            <div className="success-card">
+                                <div className="success-medallion">
                                     <i className="fa-solid fa-file-shield" style={{ fontSize: '32px', color: 'var(--ws-brown)' }}></i>
                                 </div>
-                                <h2 style={{ fontSize: '1.5rem', marginBottom: '12px', color: 'var(--ws-ink)' }}>KYC Under Review</h2>
-                                <p style={{ color: 'var(--ws-body)', marginBottom: '24px' }}>Your legal documents and application for <strong>{formData.brandName}</strong> have been safely uploaded and transmitted to our administrative team.</p>
-                                <p style={{ fontSize: '0.85rem', color: 'var(--ws-body)', background: 'var(--ws-muted)', padding: '16px', borderRadius: '8px', lineHeight: '1.6', margin: '0 0 32px' }}>
+                                <h2>KYC Under Review</h2>
+                                <p>Your legal documents and application for <strong>{formData.brandName}</strong> have been safely uploaded and transmitted to our administrative team.</p>
+                                <p style={{ fontSize: '0.85rem', color: 'var(--ws-body)', background: 'var(--ws-muted)', padding: '12px', borderRadius: '8px' }}>
                                     Verification typically takes 24-48 hours. We will notify you via email once your storefront is ready to go live.
                                 </p>
-                                <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
-                                    <button className="seller-btn-primary" onClick={() => navigate('/')}>Return to Home</button>
-                                </div>
+                                <button className="seller-btn-ghost" style={{ marginTop: '20px' }} onClick={() => navigate('/')}>
+                                    Return to Home
+                                </button>
                             </div>
                         )}
                     </div>

@@ -2,13 +2,15 @@ import React, { useState, useEffect } from "react";
 import { API_BASE_URL } from "../../apiConfig.js"; 
 import "../styles/Sellers.css";
 
-// 🔥 FIXED: Removed local db import to prevent connection collisions
-import { collection, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, setDoc , serverTimestamp } from "firebase/firestore";
+import { getAuth } from 'firebase/auth';
 
+// ⚠️ ADJUST THIS RELATIVE PATH TO POINT TO YOUR EDITOR COMPONENT
 import SellerStorefrontEditor from '../../admin/SellerStorefrontEditor'; 
 
-// 🔥 FIXED: Accepting 'db' as a prop directly from AdminLayout
+// 🔥 FIX: Added 'db' back as a prop so it uses the Secure Admin Connection!
 export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liveProducts = [], orders = [], loadAuthorizedSellers }) {
+    // --- State Management ---
     const [mainViewTab, setMainViewTab] = useState("directory"); 
 
     const [newSellerEmail, setNewSellerEmail] = useState("");
@@ -22,7 +24,6 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
     // Onboarding States
     const [pendingApplications, setPendingApplications] = useState([]);
     const [isLoadingApplications, setIsLoadingApplications] = useState(false);
-    const [applicationError, setApplicationError] = useState("");
 
     // Storefront Monitor States
     const [storefronts, setStorefronts] = useState([]);
@@ -38,10 +39,9 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
 
     const fetchApplications = async () => {
         setIsLoadingApplications(true);
-        setApplicationError(""); 
         try {
             if (!db) {
-                setApplicationError("Firebase DB instance is missing.");
+                console.error("Firebase DB instance is missing or not imported correctly.");
                 setIsLoadingApplications(false);
                 return;
             }
@@ -59,7 +59,6 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
             setPendingApplications(appsData);
         } catch (error) {
             console.error("Error fetching pending applications:", error);
-            setApplicationError(error.message || "Failed to load applications.");
         } finally {
             setIsLoadingApplications(false);
         }
@@ -114,6 +113,7 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
         if (!window.confirm(`Are you sure you want to approve ${app.brandName}?`)) return;
         
         try {
+            // 1. Move the seller into the authorized_sellers collection (Database First)
             await setDoc(doc(db, 'authorized_sellers', app.email), {
                 email: app.email,
                 brandName: app.brandName,
@@ -123,8 +123,16 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
                 kycData: app.kycData || null
             });
             
-            await updateDoc(doc(db, "seller_applications", app.id), { status: "approved" });
+            // 2. Mark the application as approved
+            await updateDoc(doc(db, "seller_applications", app.id), {
+                status: "approved",
+                approvedAt: serverTimestamp(),
+                reviewedBy: getAuth().currentUser?.email || null,
+                rejectionReason: null,
+                rejectedAt: null
+            });
             
+            // 3. Keep backend logic running in a non-blocking way
             try {
                 const headers = typeof getAuthHeaders === 'function' ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
                 await fetch(`${API_BASE_URL}/admin/sellers`, {
@@ -141,22 +149,35 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
             if (typeof loadAuthorizedSellers === 'function') loadAuthorizedSellers(); 
         } catch (error) {
             console.error("Error approving seller:", error);
-            alert(`Approval Failed: ${error.message}`);
+            if (error && error.code === "permission-denied") {
+                const signedInAs = getAuth().currentUser?.email || "an unknown account";
+                alert(`Approval Failed: the database blocked this action.\n\nYou are signed in as: ${signedInAs}\n\nSign out and sign back in with the admin account (jamba4334@gmail.com), and make sure the latest Firestore rules are published in the Firebase Console.`);
+            } else {
+                alert(`Approval Failed: ${error.message}`);
+            }
         }
     };
 
     const handleRejectApplication = async (appId) => {
-        const reason = window.prompt("Enter the reason for rejection (this will be shown to the seller):");
-        if (reason === null) return; 
-
+        const reason = window.prompt(
+            "Reason for rejection (the seller will see this).\nExamples: Invalid IFSC code, Blurry GST certificate, PAN does not match name",
+            ""
+        );
+        if (reason === null) return; // cancelled
+        const cleanReason = reason.trim().slice(0, 300);
+        if (cleanReason.length < 3) {
+            alert("Please enter a short reason so the seller knows what to fix.");
+            return;
+        }
         try {
-            await updateDoc(doc(db, "seller_applications", appId), { 
+            await updateDoc(doc(db, "seller_applications", appId), {
                 status: "rejected",
-                rejectionReason: reason || "Your application did not meet our platform requirements.",
-                rejectedAt: new Date().toISOString()
+                rejectionReason: cleanReason,
+                rejectedAt: serverTimestamp(),
+                reviewedBy: getAuth().currentUser?.email || null
             });
             fetchApplications();
-            if (window.showToast) window.showToast("Application rejected.");
+            if (window.showToast) window.showToast("Application rejected. Seller can re-apply after 24 hours.");
         } catch (error) {
             console.error("Error rejecting application:", error);
             alert(`Rejection Failed: ${error.message}`);
@@ -410,22 +431,13 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
                         </button>
                     </div>
                     
-                    {applicationError && (
-                        <div style={{ padding: '16px', marginBottom: '20px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#991b1b', fontSize: '14px' }}>
-                            <strong><i className="fa-solid fa-shield-halved"></i> Access Denied:</strong> {applicationError}
-                            <div style={{ marginTop: '8px', fontSize: '13px', color: '#b91c1c' }}>
-                                Your current email does not have Master Admin rights. Log in with <strong>jamba4334@gmail.com</strong>, or add your email to the <code>admin_users</code> database collection.
-                            </div>
-                        </div>
-                    )}
-
                     {isLoadingApplications ? (
                         <p style={{ color: 'var(--text-muted)', padding: '20px 0' }}>Loading applications...</p>
-                    ) : pendingApplications.length === 0 && !applicationError ? (
+                    ) : pendingApplications.length === 0 ? (
                         <div style={{ padding: '40px', textAlign: 'center', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px dashed #d1d5db' }}>
                             <p style={{ color: '#6b7280', margin: 0 }}>No pending merchant applications right now.</p>
                         </div>
-                    ) : pendingApplications.length > 0 ? (
+                    ) : (
                         <div className="onboarding-table-wrapper" style={{ overflowX: 'auto' }}>
                             <table className="onboarding-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                 <thead>
@@ -504,7 +516,7 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
                                 </tbody>
                             </table>
                         </div>
-                    ) : null}
+                    )}
                 </div>
             )}
 

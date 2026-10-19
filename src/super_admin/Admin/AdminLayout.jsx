@@ -14,7 +14,8 @@ import AddProductTab from "../Components/AddProductTab.jsx";
 import CategorySettings from "../Components/CategorySettings.jsx";
 import OrdersTab from "../Components/OrdersTab.jsx";
 import SellersTab from "../Components/SellersTab.jsx";
-import EarningsTab from "../Components/EarningsTab.jsx";
+// Updated to FinanceTab
+import FinanceTab from "../Components/Finance/FinanceTab.jsx";
 import MessagesTab from "../Components/MessagesTab.jsx";
 import SiteSettings from "../Components/SiteSettings.jsx";
 import CustomersTab from "../Components/CustomersTab.jsx";
@@ -234,7 +235,8 @@ export default function AdminLayout() {
         if (activeTab === "live-products" && liveProducts.length === 0) loadAdminInventory();
         
         if (activeTab === "messages" && supportTickets.length === 0) loadSupportTickets();
-        if ((activeTab === "seller-access" || activeTab === "earnings") && globalSellers.length === 0) {
+        // Updated to hook into 'finance' tab activation
+        if ((activeTab === "seller-access" || activeTab === "finance") && globalSellers.length === 0) {
             loadAuthorizedSellers();
             loadGlobalPayouts();
         }
@@ -317,14 +319,13 @@ export default function AdminLayout() {
             case "orders":
                 return <OrdersTab orders={orders} liveProducts={liveProducts} getAuthHeaders={getAuthHeaders} refreshOrders={loadAdminOrders} />;
             
-            // 🔥 FIXED: Passing db down to SellersTab so it uses the Admin Connection
             case "seller-access":
                 return <SellersTab db={db} getAuthHeaders={getAuthHeaders} globalSellers={globalSellers} liveProducts={liveProducts} orders={orders} loadAuthorizedSellers={loadAuthorizedSellers} />;
             
             case "subscriptions":
                 return <SubscriptionsTab db={db} />;
-            case "earnings": 
-                return <EarningsTab getAuthHeaders={getAuthHeaders} />;
+            case "finance": 
+                return <FinanceTab getAuthHeaders={getAuthHeaders} />;
             case "promocodes": 
                 return <PromoCodesTab getAuthHeaders={getAuthHeaders} />;
             case "messages":
@@ -417,7 +418,10 @@ export default function AdminLayout() {
                         <li className={`nav-item ${activeTab === 'subscriptions' ? 'active' : ''}`} onClick={() => setActiveTab('subscriptions')}>
                             <i className="fa-solid fa-crown"></i> Subscriptions
                         </li>
-                        <li className={`nav-item ${activeTab === 'earnings' ? 'active' : ''}`} onClick={() => setActiveTab('earnings')}><i className="fa-solid fa-wallet"></i> Earnings</li>
+                        
+                        {/* Updated to FinanceTab Navigation */}
+                        <li className={`nav-item ${activeTab === 'finance' ? 'active' : ''}`} onClick={() => setActiveTab('finance')}><i className="fa-solid fa-coins"></i> Finance</li>
+                        
                         <li className={`nav-item ${activeTab === 'promocodes' ? 'active' : ''}`} onClick={() => setActiveTab('promocodes')}><i className="fa-solid fa-tags"></i> Promo Codes</li>
                         <li className={`nav-item ${activeTab === 'messages' ? 'active' : ''}`} onClick={() => setActiveTab('messages')}>
                             <i className="fa-solid fa-envelope"></i> Inbox
