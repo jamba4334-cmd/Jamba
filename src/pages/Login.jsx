@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { signInWithPopup, GoogleAuthProvider, RecaptchaVerifier, signInWithPhoneNumber, updateProfile } from 'firebase/auth'; // 🔥 FIX: Added updateProfile
-import { auth, db } from '../firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'; 
+import { signInWithPopup, GoogleAuthProvider, RecaptchaVerifier, signInWithPhoneNumber, updateProfile } from 'firebase/auth'; 
+import { auth } from '../firebase';
 import { useNavigate, Link } from 'react-router-dom';
+import { API_BASE_URL } from '../apiConfig';
 import './Login.css';
 
 export default function Login() {
@@ -38,13 +38,11 @@ export default function Login() {
   useEffect(() => {
     const fetchMediaConfig = async () => {
       try {
-        const docRef = doc(db, "settings", "login_config");
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
+        const response = await fetch(`${API_BASE_URL}/api/v1/public/config/login_config`);
+        if (response.ok) {
+          const data = await response.json();
           if (data.mediaItems && data.mediaItems.length > 0) setMediaItems(data.mediaItems);
           if (data.slideDuration) setSlideDuration(data.slideDuration);
-          
           if (data.title) setOverlayText(prev => ({ ...prev, title: data.title }));
           if (data.subtitle) setOverlayText(prev => ({ ...prev, subtitle: data.subtitle }));
         }
@@ -72,31 +70,29 @@ export default function Login() {
     }
   }, [view]);
  
-  // 🔥 FIX: Added 'isGoogle' flag to handle routing differently based on your flowchart
   const checkExistingUser = async (user, isGoogle = false) => {
     try {
       localStorage.setItem('jamba_user_role', 'customer');
-      const docRef = doc(db, "users", user.uid);
-      const docSnap = await getDoc(docRef);
+      const token = await user.getIdToken();
       
-      if (docSnap.exists() && (docSnap.data().name || docSnap.data().ownerName)) {
+      const response = await fetch(`${API_BASE_URL}/api/v1/customer/profile`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      const data = await response.json();
+      
+      if (data.exists) {
         window.location.href = '/'; 
       } else {
-        // 🔥 NEW ROUTING LOGIC FROM YOUR NOTES
         if (isGoogle) {
-          // GOOGLE PATH: Create DB record silently and jump to Front Store
-          const payload = {
-            name: user.displayName || 'JAMBA Member',
-            ownerName: user.displayName || 'JAMBA Member',
-            email: user.email || '',
-            role: "customer",
-            uid: user.uid,
-            createdAt: serverTimestamp()
-          };
-          await setDoc(docRef, payload, { merge: true });
+          await fetch(`${API_BASE_URL}/api/v1/customer/profile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ name: user.displayName || 'JAMBA Member' })
+          });
           window.location.href = '/';
         } else {
-          // MOBILE PATH: Stop at the "Name" form
           setView('profile');
           setLoading(false); 
         }
@@ -115,7 +111,6 @@ export default function Login() {
     const provider = new GoogleAuthProvider();
     try {
       const res = await signInWithPopup(auth, provider);
-      // Send 'true' to flag that this is a Google login
       await checkExistingUser(res.user, true);
     } catch (err) { 
       setError(err.message); 
@@ -164,7 +159,6 @@ export default function Login() {
     setError('');
     try {
       const res = await confirmation.confirm(otpString);
-      // Send 'false' because this is a Mobile login
       await checkExistingUser(res.user, false);
     } catch (err) { 
       setError("Invalid OTP Code. Please try again."); 
@@ -194,28 +188,22 @@ export default function Login() {
         return;
       }
       
-      // 🔥 FIX: Update the Firebase Auth profile so the Navbar can read the name!
       await updateProfile(user, { displayName: profile.name.trim() });
+      const token = await user.getIdToken();
       
       const payload = {
         name: profile.name.trim(), 
-        ownerName: profile.name.trim(),
         email: profile.email.trim(), 
-        role: "customer",
-        uid: user.uid,
-        createdAt: serverTimestamp() 
+        phone: phone && phone !== '+91' ? phone : undefined
       };
 
-      if (phone && phone !== '+91') {
-        payload.phone = phone;
-      }
+      const response = await fetch(`${API_BASE_URL}/api/v1/customer/profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(payload)
+      });
 
-      const savePromise = setDoc(doc(db, "users", user.uid), payload, { merge: true });
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Firebase timeout")), 6000)
-      );
-
-      await Promise.race([savePromise, timeoutPromise]);
+      if (!response.ok) throw new Error("Failed to connect to the database.");
       window.location.href = '/';
       
     } catch (err) {
@@ -252,7 +240,6 @@ export default function Login() {
 
   return (
     <div className="login-page-wrapper">
-      
       <div className="login-image-side">
         {mediaItems.map((item, index) => (
           <div 
@@ -266,7 +253,6 @@ export default function Login() {
             )}
           </div>
         ))}
-
         <div className="image-overlay">
           <h2>{overlayText.title}</h2>
           <p>{overlayText.subtitle}</p>

@@ -88,7 +88,10 @@ const Payment = () => {
       // ==========================================
       const response = await fetch(`${API_BASE_URL}/create-order`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+            'Content-Type': 'application/json',
+            'Idempotency-Key': crypto.randomUUID() // 🔒 NEW: Prevents double-charging customers
+        },
         body: JSON.stringify({
           cart: cartItems,
           customer: user?.email || "guest@jambawear.com",
@@ -107,7 +110,6 @@ const Payment = () => {
       if (!response.ok) throw new Error(data.error || "Failed to create order");
 
       // 1. COD SUCCESS HANDLER
-      // If the backend processed it as COD, it immediately returns an order_id
       if (data.payment_method === "COD") {
         handleSuccessCleanup();
         setIsProcessing(false);
@@ -116,7 +118,6 @@ const Payment = () => {
       }
 
       // 2. RAZORPAY SUCCESS HANDLER
-      // If the backend returns a Razorpay ID, open the payment modal
       if (data.id) {
         const options = {
           key: import.meta.env.VITE_RAZORPAY_KEY_ID, 

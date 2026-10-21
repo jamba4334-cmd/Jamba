@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from '../apiConfig';
 import './Address.css'; 
 
 export default function Address() {
@@ -27,13 +26,15 @@ export default function Address() {
       }
       
       try {
-        const userRef = doc(db, 'users', user.uid);
-        const docSnap = await getDoc(userRef);
+        const token = await user.getIdToken();
+        const response = await fetch(`${API_BASE_URL}/api/v1/customer/addresses`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
         
-        if (docSnap.exists() && docSnap.data().addresses) {
-          const fetchedAddresses = docSnap.data().addresses;
-          setAddresses(fetchedAddresses);
-          localStorage.setItem('jambaSavedAddresses', JSON.stringify(fetchedAddresses));
+        if (response.ok) {
+            const fetchedAddresses = await response.json();
+            setAddresses(fetchedAddresses);
+            localStorage.setItem('jambaSavedAddresses', JSON.stringify(fetchedAddresses));
         }
       } catch (error) {
         console.error("Error fetching addresses:", error);
@@ -52,8 +53,17 @@ export default function Address() {
     const updatedAddresses = [...addresses, newAddress];
     
     try {
-      const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, { addresses: updatedAddresses }, { merge: true });
+      const token = await user.getIdToken();
+      const response = await fetch(`${API_BASE_URL}/api/v1/customer/addresses`, {
+          method: 'POST',
+          headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ addresses: updatedAddresses })
+      });
+      
+      if (!response.ok) throw new Error("Failed to save");
       
       setAddresses(updatedAddresses);
       localStorage.setItem('jambaSavedAddresses', JSON.stringify(updatedAddresses));
@@ -69,8 +79,15 @@ export default function Address() {
     const updatedAddresses = addresses.filter((_, index) => index !== indexToDelete);
     
     try {
-      const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, { addresses: updatedAddresses }, { merge: true });
+      const token = await user.getIdToken();
+      await fetch(`${API_BASE_URL}/api/v1/customer/addresses`, {
+          method: 'POST',
+          headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ addresses: updatedAddresses })
+      });
       
       setAddresses(updatedAddresses);
       localStorage.setItem('jambaSavedAddresses', JSON.stringify(updatedAddresses));
@@ -152,7 +169,6 @@ export default function Address() {
               <input className="input-field" value={newAddress.landmark} onChange={(e) => setNewAddress({...newAddress, landmark: e.target.value})} />
             </div>
             
-            {/* 🔥 NEW: 3-Column Grid for massive space saving */}
             <div className="grid-3">
               <div className="input-group">
                 <label>Pincode</label>

@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './OrdersTab.css';
-
-// Import secure generator and database connection
-import { db } from '../firebase';
-import { generateOrderInvoice } from '../utils/invoiceGenerator';
+import { API_BASE_URL } from '../apiConfig.js';
 
 export default function OrdersTab({ isActive, sellerOrders, loadingData, acceptOrder }) {
     const [expandedOrders, setExpandedOrders] = useState({});
@@ -212,22 +209,16 @@ export default function OrdersTab({ isActive, sellerOrders, loadingData, acceptO
                                             <div className="moc-pb-row moc-pb-final"><span>Gross Earning Base</span><span>₹{finalSellerTotal.toLocaleString('en-IN')}</span></div>
                                         </div>
                                         
-                                        {/* INVOICE VIEW / PRINT BUTTONS FOR SELLER */}
+                                        {/* INVOICE VIEW / PRINT BUTTONS FOR SELLER VIA API */}
                                         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px', marginBottom: '4px' }}>
-                                            <button
-                                                type="button"
-                                                onClick={() => generateOrderInvoice(order, db, false)}
-                                                style={{ flex: 1, minWidth: '160px', background: '#ffffff', color: '#111827', border: '1px solid #111827', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                                            <a
+                                                href={`${API_BASE_URL}/api/orders/${order.id}/invoice`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                style={{ flex: 1, minWidth: '160px', background: '#ffffff', color: '#111827', border: '1px solid #111827', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', textDecoration: 'none' }}
                                             >
-                                                <i className="fa-solid fa-eye"></i> View Invoice
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => generateOrderInvoice(order, db, true)}
-                                                style={{ flex: 1, minWidth: '160px', background: '#8b7355', color: '#ffffff', border: '1px solid #8b7355', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                                            >
-                                                <i className="fa-solid fa-download"></i> Download / Print
-                                            </button>
+                                                <i className="fa-solid fa-file-invoice"></i> View / Download Invoice
+                                            </a>
                                         </div>
                                     </div>
                                 )}

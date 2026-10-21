@@ -3,9 +3,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore'; 
 
-// Import secure generator and database connection
 import { auth, db } from '../firebase'; 
-import { generateOrderInvoice } from '../utils/invoiceGenerator';
+import { API_BASE_URL } from '../apiConfig';
 import './Orders.css';
 
 export default function Orders() {
@@ -58,43 +57,27 @@ export default function Orders() {
     }
   };
 
+  // 🔥 ZERO-TRUST FIX: Securely fetch orders through the Python backend
   const fetchUserOrders = async (user) => {
     try {
-      const ordersRef = collection(db, "orders");
-      let queryPromises = [];
-
-      if (user.email) {
-        queryPromises.push(getDocs(query(ordersRef, where("email", "==", user.email))));
-        queryPromises.push(getDocs(query(ordersRef, where("customerContact", "==", user.email))));
-      }
-      if (user.uid) {
-        queryPromises.push(getDocs(query(ordersRef, where("userId", "==", user.uid))));
-      }
-
-      const snapshots = await Promise.all(queryPromises);
-      let ordersMap = new Map();
-      
-      snapshots.forEach(snapshot => {
-        snapshot.forEach((doc) => {
-          let data = doc.data();
-          data.id = doc.id;
-          ordersMap.set(doc.id, data);
-        });
+      const token = await user.getIdToken();
+      const response = await fetch(`${API_BASE_URL}/api/v1/customer/orders`, {
+          method: 'GET',
+          headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+          }
       });
 
-      let ordersArray = Array.from(ordersMap.values());
+      if (!response.ok) throw new Error("Failed to fetch secure orders");
+
+      const ordersArray = await response.json();
 
       if (ordersArray.length === 0) {
         setOrders([]);
         setLoading(false);
         return;
       }
-
-      ordersArray.sort((a, b) => {
-        const dateA = a.created_at ? new Date(a.created_at) : (a.createdAt ? a.createdAt.toDate() : new Date(0));
-        const dateB = b.created_at ? new Date(b.created_at) : (b.createdAt ? b.createdAt.toDate() : new Date(0));
-        return dateB.getTime() - dateA.getTime();
-      });
 
       setOrders(ordersArray);
       setLoading(false);
@@ -107,7 +90,7 @@ export default function Orders() {
 
   const getOrderStatus = (order) => {
     const dbStatus = order.status ? order.status.toLowerCase() : 'pending';
-    const orderTime = order.created_at ? new Date(order.created_at) : (order.createdAt ? order.createdAt.toDate() : new Date());
+    const orderTime = order.created_at ? new Date(order.created_at) : (order.createdAt ? new Date(order.createdAt) : new Date());
     const now = new Date();
     const timeDiff = now.getTime() - orderTime.getTime();
     const hoursElapsed = timeDiff / (1000 * 60 * 60);
@@ -283,7 +266,7 @@ export default function Orders() {
       )}
 
       {!loading && orders.map((order) => {
-        const dateObj = order.created_at ? new Date(order.created_at) : (order.createdAt ? order.createdAt.toDate() : new Date());
+        const dateObj = order.created_at ? new Date(order.created_at) : (order.createdAt ? new Date(order.createdAt) : new Date());
         const orderDate = dateObj.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
         
         const { status, badgeText, deliveryText, boxStyle, icon } = getOrderStatus(order);
@@ -292,7 +275,7 @@ export default function Orders() {
         const hasTracking = order.trackingId && order.courierName;
         const isExpanded = expandedOrders[order.id];
 
-        const subtotal = order.items ? order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0) : 0;
+        const subtotal = order.items ? order.items.reduce((sum, item) => sum + ((item.price || item.selling_price || 0) * item.quantity), 0) : 0;
         const finalTotal = order.total || order.totalAmount || order.amount || subtotal;
         const deliveryFee = finalTotal > subtotal ? finalTotal - subtotal : 0;
 
@@ -322,10 +305,10 @@ export default function Orders() {
                 {order.items && order.items.map((item, index) => {
                   return (
                     <div key={index} className="minimal-item-row">
-                      <img src={item.image || "https://raw.githubusercontent.com/jamba4334-cmd/JAMBA/main/assets/JAMBA.png"} className="minimal-item-img" alt={item.title} />
+                      <img src={item.image || "https://raw.githubusercontent.com/jamba4334-cmd/JAMBA/main/assets/JAMBA.png"} className="minimal-item-img" alt={item.title || item.name} />
                       
                       <div className="minimal-item-info">
-                        <p className="minimal-item-title">{item.title}</p>
+                        <p className="minimal-item-title">{item.title || item.name}</p>
                         <p className="minimal-item-meta">Size: {item.size || 'Standard'} &nbsp;•&nbsp; Qty: {item.quantity}</p>
                         
                         {(item.brandName || item.sellerName) && (
@@ -338,7 +321,7 @@ export default function Orders() {
                       </div>
                       
                       <div className="minimal-item-price">
-                        ₹{(item.price * item.quantity).toLocaleString('en-IN')}
+                        ₹{((item.price || item.selling_price || 0) * item.quantity).toLocaleString('en-IN')}
                       </div>
                     </div>
                   );
@@ -394,15 +377,17 @@ export default function Orders() {
                   </div>
                 </div>
 
-                {/* --- CUSTOMER INVOICE GENERATOR (LOCKED BEHIND DELIVERY STATUS) --- */}
+                {/* --- ZERO-TRUST FIX: CUSTOMER INVOICE GENERATOR VIA API --- */}
                 {status === 'delivered' ? (
                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '20px' }}>
-                        <button type="button" onClick={() => generateOrderInvoice(order, db, false)} style={{ flex: 1, minWidth: '160px', background: '#ffffff', color: '#111827', border: '1px solid #111827', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                            <i className="fa-solid fa-eye"></i> View Invoice
-                        </button>
-                        <button type="button" onClick={() => generateOrderInvoice(order, db, true)} style={{ flex: 1, minWidth: '160px', background: '#8b7355', color: '#ffffff', border: '1px solid #8b7355', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                            <i className="fa-solid fa-download"></i> Download Invoice
-                        </button>
+                        <a
+                            href={`${API_BASE_URL}/api/orders/${order.id}/invoice`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ flex: 1, minWidth: '160px', background: '#ffffff', color: '#111827', border: '1px solid #111827', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', textDecoration: 'none' }}
+                        >
+                            <i className="fa-solid fa-file-invoice"></i> View / Download Invoice
+                        </a>
                     </div>
                 ) : (
                     <div style={{ marginTop: '20px', padding: '12px', background: '#f3f4f6', borderRadius: '6px', fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -449,7 +434,7 @@ export default function Orders() {
                             }}
                           >
                             <span style={{ fontSize: '14px', color: '#fbbf24' }}>★</span> 
-                            {order.items.length > 1 ? `Write Review for ${item.title}` : 'Write a Review'}
+                            {order.items.length > 1 ? `Write Review for ${item.title || item.name}` : 'Write a Review'}
                           </button>
                         </div>
                       ) : (
@@ -457,7 +442,7 @@ export default function Orders() {
                           
                           {order.items.length > 1 && (
                             <p style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', color: '#111827' }}>
-                              Review for {item.title}
+                              Review for {item.title || item.name}
                             </p>
                           )}
                           
@@ -506,9 +491,9 @@ export default function Orders() {
             
             <h2>Write a Review</h2>
             <div className="review-product-preview">
-              <img src={productToReview.image} alt={productToReview.title} />
+              <img src={productToReview.image || "https://raw.githubusercontent.com/jamba4334-cmd/JAMBA/main/assets/JAMBA.png"} alt={productToReview.title || productToReview.name} />
               <div>
-                <p className="review-modal-title">{productToReview.title}</p>
+                <p className="review-modal-title">{productToReview.title || productToReview.name}</p>
                 <p className="review-modal-meta">Rate and review your purchase</p>
               </div>
             </div>

@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
-import { db, auth } from '../firebase'; 
+import { auth } from '../firebase'; 
+import { API_BASE_URL } from '../apiConfig';
 import './ProductView.css';
 
 export default function ProductView() {
@@ -39,55 +39,38 @@ export default function ProductView() {
     async function fetchProduct() {
       setLoading(true);
       try {
-        const q = query(collection(db, "products"), where("item_id", "==", id));
-        const querySnapshot = await getDocs(q);
-
-        let productData = null;
-
-        if (!querySnapshot.empty) {
-          productData = querySnapshot.docs[0].data();
-          productData.id = productData.item_id || querySnapshot.docs[0].id;
+        const response = await fetch(`${API_BASE_URL}/api/v1/public/products/${id}`);
+        if (!response.ok) throw new Error("Product not found");
+        
+        const productData = await response.json();
+        setProduct(productData);
+        
+        let compiledMedia = [];
+        if (productData.images && productData.images.length > 0) {
+          compiledMedia.push({ type: 'image', url: productData.images[0] }); 
         } else {
-          const docRef = doc(db, "products", id);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            productData = docSnap.data();
-            productData.id = docSnap.id;
-          }
+           compiledMedia.push({ type: 'image', url: "https://via.placeholder.com/400x500" }); 
+        }
+        
+        if (productData.video_url) {
+          compiledMedia.push({ type: 'video', url: productData.video_url }); 
+        }
+        
+        if (productData.images && productData.images.length > 1) {
+          productData.images.slice(1).forEach(img => compiledMedia.push({ type: 'image', url: img }));
+        }
+        
+        setMediaList(compiledMedia);
+        if (compiledMedia.length > 0) setActiveMedia(compiledMedia[0]);
+            
+        if (productData.sizing_type === 'free_size' || productData.requires_size === false || (productData.category && productData.category.toLowerCase().includes('accessories'))) {
+          setSelectedSize("Free Size");
+        } else {
+          setSelectedSize(null);
         }
 
-        if (productData) {
-          setProduct(productData);
-          
-          let compiledMedia = [];
-          if (productData.images && productData.images.length > 0) {
-            compiledMedia.push({ type: 'image', url: productData.images[0] }); 
-          } else {
-             compiledMedia.push({ type: 'image', url: "https://via.placeholder.com/400x500" }); 
-          }
-          
-          if (productData.video_url) {
-            compiledMedia.push({ type: 'video', url: productData.video_url }); 
-          }
-          
-          if (productData.images && productData.images.length > 1) {
-            productData.images.slice(1).forEach(img => compiledMedia.push({ type: 'image', url: img }));
-          }
-          
-          setMediaList(compiledMedia);
-          if (compiledMedia.length > 0) setActiveMedia(compiledMedia[0]);
-              
-          if (productData.sizing_type === 'free_size' || productData.requires_size === false || (productData.category && productData.category.toLowerCase().includes('accessories'))) {
-            setSelectedSize("Free Size");
-          } else {
-            setSelectedSize(null);
-          }
-
-          fetchProductReviews(productData.id);
-          fetchRecommendations(productData.category, productData.id);
-        } else {
-          setError(true);
-        }
+        fetchProductReviews(productData.id);
+        fetchRecommendations(productData.category, productData.id);
       } catch (err) {
         console.error(err);
         setError(true);
@@ -101,16 +84,10 @@ export default function ProductView() {
   const fetchRecommendations = async (category, currentId) => {
     if (!category) return;
     try {
-      const q = query(collection(db, "products"), where("category", "==", category));
-      const querySnapshot = await getDocs(q);
-      
-      let recs = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        data.id = data.item_id || doc.id;
-        if (data.id !== currentId && !data.isHidden) recs.push(data);
-      });
-      setRecommendedProducts(recs.sort(() => 0.5 - Math.random()).slice(0, 6));
+      const response = await fetch(`${API_BASE_URL}/api/v1/public/recommendations/${category}`);
+      if (!response.ok) return;
+      const recs = await response.json();
+      setRecommendedProducts(recs.filter(r => r.id !== currentId).sort(() => 0.5 - Math.random()).slice(0, 6));
     } catch (error) {
       console.error("Error fetching recommendations:", error);
     }
@@ -118,19 +95,12 @@ export default function ProductView() {
 
   const fetchProductReviews = async (productId) => {
     try {
-      const q = query(collection(db, "reviews"), where("productId", "==", productId));
-      const querySnapshot = await getDocs(q);
+      const response = await fetch(`${API_BASE_URL}/api/v1/public/reviews/${productId}`);
+      if (!response.ok) return;
       
-      let fetchedReviews = [];
-      let sumRatings = 0;
-
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        fetchedReviews.push(data);
-        sumRatings += data.rating;
-      });
-
+      const fetchedReviews = await response.json();
       if (fetchedReviews.length > 0) {
+        const sumRatings = fetchedReviews.reduce((sum, rev) => sum + rev.rating, 0);
         const avg = (sumRatings / fetchedReviews.length).toFixed(1);
         setAverageRating(avg);
         setTotalReviews(fetchedReviews.length);
@@ -139,11 +109,7 @@ export default function ProductView() {
         else if (avg < 4.5) setSentiment("Good");
         else setSentiment("Very Good");
 
-        fetchedReviews.sort((a, b) => {
-          const dateA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-          const dateB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-          return dateB - dateA;
-        });
+        fetchedReviews.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       }
       setReviews(fetchedReviews);
     } catch (error) {
@@ -154,15 +120,21 @@ export default function ProductView() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
-      if (user && product) checkWishlistStatus(user.uid, product.id);
+      if (user && product) checkWishlistStatus(user, product.id);
     });
     return () => unsubscribe();
   }, [product]);
 
-  const checkWishlistStatus = async (uid, productId) => {
+  const checkWishlistStatus = async (user, productId) => {
      try {
-      const docSnap = await getDoc(doc(db, 'users', uid, 'wishlist', productId));
-      if (docSnap.exists()) setInWishlist(true);
+      const token = await user.getIdToken();
+      const response = await fetch(`${API_BASE_URL}/api/v1/customer/wishlist/check/${productId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+          const data = await response.json();
+          setInWishlist(data.inWishlist);
+      }
     } catch (err) { console.error("Error checking wishlist:", err); }
   };
 
@@ -172,19 +144,20 @@ export default function ProductView() {
       navigate(`/login?redirect=product/${product.id}`);
       return;
     }
-    const wishlistDocRef = doc(db, 'users', currentUser.uid, 'wishlist', product.id);
     try {
-       if (inWishlist) {
-        await deleteDoc(wishlistDocRef);
-        setInWishlist(false);
-        } else {
-        await setDoc(wishlistDocRef, { productId: product.id, addedAt: new Date() });
-        setInWishlist(true);
-      }
+       const token = await currentUser.getIdToken();
+       const method = inWishlist ? 'DELETE' : 'POST';
+       const response = await fetch(`${API_BASE_URL}/api/v1/customer/wishlist`, {
+           method: method,
+           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+           body: JSON.stringify({ productId: product.id })
+       });
+       
+       if (response.ok) setInWishlist(!inWishlist);
+       else alert("Failed to update wishlist.");
     } catch (err) { alert("Failed to update wishlist."); }
   };
 
-  // 🔥 NEW: Native Share API Logic
   const handleShare = async () => {
     const shareData = {
       title: product?.title || 'JAMBA WEAR Product',
@@ -303,8 +276,6 @@ export default function ProductView() {
 
   return (
     <div className="jamba-pv-wrapper">
-      
-      {/* MOBILE STICKY BOTTOM BAR */}
       <div className="mobile-sticky-action-bar">
         <button className="mob-action-btn cart-btn" onClick={handleAddToCart} disabled={isOOS || (!isCODAllowed && !isOnlineAllowed)}>
           {isOOS ? 'OUT OF STOCK' : addedToCart ? '✓ ADDED' : 'ADD TO CART'}
@@ -315,16 +286,10 @@ export default function ProductView() {
       </div>
 
       <div className="jamba-pv-container">
-        
-        {/* =========================================
-            LEFT COLUMN: MULTI-MEDIA GALLERY
-        ============================================= */}
         <div className="jamba-pv-left">
           <div className="sticky-image-container">
             <div className="image-gallery-layout">
-              
               <div className="gallery-main-image hidden-on-mobile">
-                {/* 🔥 NEW: Stacked Floating Actions for Desktop */}
                 <div className="floating-actions-container float-desktop">
                   <button className={`floating-action-btn ${inWishlist ? 'active' : ''}`} onClick={toggleWishlist} title="Add to Wishlist">
                     {inWishlist ? (
@@ -346,7 +311,6 @@ export default function ProductView() {
                     </svg>
                   </button>
                 </div>
-
                 {activeMedia?.type === 'video' ? (
                   <video src={activeMedia.url} autoPlay loop muted controls style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                 ) : (
@@ -374,9 +338,7 @@ export default function ProductView() {
                 ))}
               </div>
 
-              {/* MOBILE SWIPER */}
               <div className="mobile-image-swiper visible-on-mobile">
-                {/* 🔥 NEW: Stacked Floating Actions for Mobile */}
                 <div className="floating-actions-container float-mobile">
                   <button className={`floating-action-btn ${inWishlist ? 'active' : ''}`} onClick={toggleWishlist}>
                     {inWishlist ? (
@@ -398,7 +360,6 @@ export default function ProductView() {
                     </svg>
                   </button>
                 </div>
-
                 <div className="swiper-track">
                   {mediaList.map((media, idx) => (
                     media.type === 'video' ? (
@@ -409,22 +370,15 @@ export default function ProductView() {
                   ))}
                 </div>
               </div>
-
             </div>
           </div>
         </div>
 
-        {/* =========================================
-            RIGHT COLUMN: REORDERED FOR NEW UI
-        ============================================= */}
         <div className="jamba-pv-right">
-          
           <div className="jv-brand-row">
             {product.brandName || 'JAMBA WEAR'} <span className="separator">|</span> {product.sellerName || 'JAMBA'}
           </div>
-            
           <h1 className="jv-title">{product.title}</h1>
-          
           <div className="jv-pricing-row">
             <span className="jv-selling-price">₹{product.selling_price}</span>
             {discountPercent > 0 && (
@@ -450,7 +404,6 @@ export default function ProductView() {
 
           {isOOS && <div className="jv-oos-tag">Currently Out of Stock</div>}
 
-          {/* 🔥 MOVED: Size Selector now directly above Assurances */}
           {product.sizing_type === 'free_size' ? (
              <div className="jv-size-section">
                 <div className="section-heading-row">
@@ -504,7 +457,6 @@ export default function ProductView() {
              </div>
           )}
 
-          {/* 🔥 MOVED: JAMBA Assurances Box */}
           <div className="jv-assurances-box">
             <div className="assurance-item">
               <i className="fa-solid fa-truck-fast"></i>
@@ -520,7 +472,6 @@ export default function ProductView() {
             {product.description || 'Elevate your culture with this premium piece. Crafted with care.'}
           </div>
 
-          {/* SPECS & CARE ACCORDION */}
           <div className="jv-specs-gray-box">
             <div className="spec-row"><span className="spec-label">Color:</span><span className="spec-value">{product.color || 'N/A'}</span></div>
             <div className="spec-row"><span className="spec-label">Fabric:</span><span className="spec-value">{product.fabric || 'N/A'}</span></div>
@@ -550,12 +501,7 @@ export default function ProductView() {
         </div>
       </div>
 
-      {/* =========================================
-          FULL-WIDTH BOTTOM SECTIONS
-      ============================================= */}
       <div className="jv-bottom-sections">
-        
-        {/* RECOMMENDATIONS SECTION */}
         {recommendedProducts.length > 0 && (
           <>
             <div className="jv-divider"></div>
@@ -580,11 +526,8 @@ export default function ProductView() {
         )}
 
         <div className="jv-divider"></div>
-
-        {/* RATINGS & REVIEWS SECTION */}
         <div className="jv-section reviews-section" id="reviews-section">
           <h3>Customer Reviews</h3>
-          
           {totalReviews === 0 ? (
             <div className="jv-no-reviews">
               <p>Be the first to review this product!</p>
@@ -600,7 +543,6 @@ export default function ProductView() {
                   {sentiment} Quality
                 </span>
               </div>
-
               <div className="jv-reviews-feed">
                 {reviews.map((rev, idx) => (
                   <div key={idx} className="jv-individual-review">
@@ -613,11 +555,9 @@ export default function ProductView() {
                         {rev.rating} ★
                       </span>
                     </div>
-                    
                     <span className="rev-text">
                       {rev.reviewText ? rev.reviewText : "Great product, highly recommended!"}
                     </span>
-                    
                     {rev.images && rev.images.length > 0 && (
                       <div className="rev-images">
                         {rev.images.map((imgUrl, i) => (
@@ -634,10 +574,9 @@ export default function ProductView() {
                         ))}
                       </div>
                     )}
-                    
                     {rev.createdAt && (
                       <span className="rev-date">
-                        {new Date(rev.createdAt.toDate()).toLocaleDateString('en-IN', {month: 'long', year:'numeric'})}
+                        {new Date(rev.createdAt).toLocaleDateString('en-IN', {month: 'long', year:'numeric'})}
                       </span>
                     )}
                   </div>
@@ -648,7 +587,6 @@ export default function ProductView() {
         </div>
       </div>
 
-      {/* REVIEW IMAGE MODAL */}
       {selectedReviewImg && (
         <div className="review-image-modal" onClick={() => setSelectedReviewImg(null)}>
           <div className="review-modal-content" onClick={e => e.stopPropagation()}>
@@ -661,7 +599,6 @@ export default function ProductView() {
         </div>
       )}
 
-      {/* SIZE GUIDE MODAL */}
       {showSizeGuide && product.size_chart && (
         <div className="size-guide-modal" onClick={() => setShowSizeGuide(false)}>
           <div className="size-guide-content" onClick={e => e.stopPropagation()}>
@@ -695,7 +632,6 @@ export default function ProductView() {
           </div>
         </div>
       )}
-
     </div>
   );
 }

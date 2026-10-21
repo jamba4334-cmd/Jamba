@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { API_BASE_URL } from '../apiConfig'; // 🔥 NEW: Import API URL
 import './BrandStorefront.css';
 
 let isDragging = false;
@@ -63,12 +63,20 @@ export default function BrandStorefront() {
         const fetchStorefront = async () => {
             setIsLoading(true);
             try {
-                const q = query(collection(db, "seller_profiles"), where("storefront.vanityHandle", "==", vanityHandle.toLowerCase()));
-                const querySnapshot = await getDocs(q);
-                if (querySnapshot.empty) setError("Brand storefront not found.");
-                else setStorefront(querySnapshot.docs[0].data().storefront);
-            } catch (err) { setError("Failed to load storefront."); } 
-            finally { setIsLoading(false); }
+                // 🔥 NEW: Secure fetch via Python backend instead of locked-down Firestore query
+                const response = await fetch(`${API_BASE_URL}/api/v1/public/storefront/${vanityHandle.toLowerCase()}`);
+                
+                if (!response.ok) {
+                    setError("Brand storefront not found.");
+                } else {
+                    const data = await response.json();
+                    setStorefront(data);
+                }
+            } catch (err) { 
+                setError("Failed to load storefront."); 
+            } finally { 
+                setIsLoading(false); 
+            }
         };
         if (vanityHandle) fetchStorefront();
     }, [vanityHandle]);
@@ -103,7 +111,6 @@ export default function BrandStorefront() {
     if (isLoading) return <div className="storefront-loading"><i className="fa-solid fa-spinner fa-spin"></i> Loading...</div>;
     if (error || !storefront) return <div className="storefront-error"><h2>{error || "Store Not Found"}</h2><Link to="/" className="storefront-back-btn">Return to Marketplace</Link></div>;
 
-    // 🔥 SUSPENDED STORE LOGIC: Hide the entire store if admin suspended it
     if (storefront.isSuspended) {
         return (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', backgroundColor: 'var(--ws-bg, #faf8f5)', fontFamily: 'Inter, sans-serif' }}>

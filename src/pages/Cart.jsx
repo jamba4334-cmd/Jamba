@@ -1,8 +1,6 @@
 // src/pages/Cart.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../firebase'; 
 import { useAuth } from '../context/AuthContext';
 import { API_BASE_URL } from '../apiConfig.js'; 
 import './Cart.css'; 
@@ -48,12 +46,15 @@ export default function Cart() {
             } 
             else if (user) {
                 try {
-                    const cartRef = doc(db, 'carts', user.uid);
-                    const cartSnap = await getDoc(cartRef);
+                    const token = await user.getIdToken();
+                    const response = await fetch(`${API_BASE_URL}/api/v1/customer/cart`, {
+                        method: 'GET',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
                     
                     let firebaseCart = [];
-                    if (cartSnap.exists()) {
-                        firebaseCart = cartSnap.data().items || [];
+                    if (response.ok) {
+                        firebaseCart = await response.json();
                     }
                     
                     const localCart = JSON.parse(localStorage.getItem('jambaCart') || '[]');
@@ -68,7 +69,15 @@ export default function Cart() {
 
                     setCart(mergedCart);
                     localStorage.setItem('jambaCart', JSON.stringify(mergedCart));
-                    await setDoc(cartRef, { items: mergedCart }, { merge: true });
+                    
+                    await fetch(`${API_BASE_URL}/api/v1/customer/cart`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ items: mergedCart })
+                    });
                 } catch (error) {
                     console.error("Error syncing cart:", error);
                 }
@@ -102,10 +111,17 @@ export default function Cart() {
             localStorage.setItem('jambaCart', JSON.stringify(newCart));
             if (user) {
                 try {
-                    const cartRef = doc(db, 'carts', user.uid);
-                    await setDoc(cartRef, { items: newCart }, { merge: true });
+                    const token = await user.getIdToken();
+                    await fetch(`${API_BASE_URL}/api/v1/customer/cart`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ items: newCart })
+                    });
                 } catch (error) {
-                    console.error("Error saving cart to Firebase:", error);
+                    console.error("Error saving cart to API:", error);
                 }
             }
         }
@@ -230,7 +246,6 @@ export default function Cart() {
             return;
         }
 
-        // Just pass the appliedPromoCode, the backend will do the rest!
         navigate('/payment', {
             state: {
                 cartItems: cart,

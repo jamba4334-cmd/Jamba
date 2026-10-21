@@ -14,7 +14,6 @@ import AddProductTab from "../Components/AddProductTab.jsx";
 import CategorySettings from "../Components/CategorySettings.jsx";
 import OrdersTab from "../Components/OrdersTab.jsx";
 import SellersTab from "../Components/SellersTab.jsx";
-// Updated to FinanceTab
 import FinanceTab from "../Components/Finance/FinanceTab.jsx";
 import MessagesTab from "../Components/MessagesTab.jsx";
 import SiteSettings from "../Components/SiteSettings.jsx";
@@ -23,6 +22,9 @@ import ReviewsTab from "../Components/ReviewsTab.jsx";
 import MasterControlTab from "../Components/MasterControlTab.jsx";
 import PromoCodesTab from "../Components/PromoCodesTab.jsx"; 
 import SubscriptionsTab from "../Components/SubscriptionsTab.jsx";
+
+// 🔒 NEW: Import the Approval Workflow
+import AdminProductApproval from "../Components/AdminProductApproval.jsx";
 
 // --- Firebase Initialization ---
 const firebaseConfig = {
@@ -235,7 +237,6 @@ export default function AdminLayout() {
         if (activeTab === "live-products" && liveProducts.length === 0) loadAdminInventory();
         
         if (activeTab === "messages" && supportTickets.length === 0) loadSupportTickets();
-        // Updated to hook into 'finance' tab activation
         if ((activeTab === "seller-access" || activeTab === "finance") && globalSellers.length === 0) {
             loadAuthorizedSellers();
             loadGlobalPayouts();
@@ -314,14 +315,15 @@ export default function AdminLayout() {
                 return <InventoryTab liveProducts={liveProducts} getAuthHeaders={getAuthHeaders} refreshInventory={loadAdminInventory} onEditProduct={(product) => { setEditingProduct(product); setActiveTab("add-product"); }} />;
             case "add-product":
                 return <AddProductTab getAuthHeaders={getAuthHeaders} refreshInventory={loadAdminInventory} editingProduct={editingProduct} onComplete={() => { setEditingProduct(null); setActiveTab("live-products"); }} />;
+            // 🔒 NEW: The Approval Tab routing
+            case "approvals":
+                return <AdminProductApproval isActive={true} getAuthHeaders={getAuthHeaders} />;
             case "tribe-settings":
                 return <CategorySettings getAuthHeaders={getAuthHeaders} />;
             case "orders":
                 return <OrdersTab orders={orders} liveProducts={liveProducts} getAuthHeaders={getAuthHeaders} refreshOrders={loadAdminOrders} />;
-            
             case "seller-access":
                 return <SellersTab db={db} getAuthHeaders={getAuthHeaders} globalSellers={globalSellers} liveProducts={liveProducts} orders={orders} loadAuthorizedSellers={loadAuthorizedSellers} />;
-            
             case "subscriptions":
                 return <SubscriptionsTab db={db} />;
             case "finance": 
@@ -408,6 +410,10 @@ export default function AdminLayout() {
                 <nav className="admin-tab-bar">
                     <ul className="nav-menu">
                         <li className={`nav-item ${activeTab === 'live-products' ? 'active' : ''}`} onClick={() => setActiveTab('live-products')}><i className="fa-solid fa-layer-group"></i> Inventory</li>
+                        
+                        {/* 🔒 NEW: The Approvals Button */}
+                        <li className={`nav-item ${activeTab === 'approvals' ? 'active' : ''}`} onClick={() => setActiveTab('approvals')}><i className="fa-solid fa-clipboard-check"></i> Approvals</li>
+                        
                         <li className={`nav-item ${activeTab === 'add-product' ? 'active' : ''}`} onClick={() => { setEditingProduct(null); setActiveTab('add-product'); }}><i className="fa-solid fa-plus"></i> Add Product</li>
                         <li className={`nav-item ${activeTab === 'tribe-settings' ? 'active' : ''}`} onClick={() => setActiveTab('tribe-settings')}><i className="fa-solid fa-sitemap"></i> Categories</li>
                         <li className={`nav-item ${activeTab === 'orders' ? 'active' : ''}`} onClick={() => setActiveTab('orders')}><i className="fa-solid fa-truck"></i> Orders</li>
@@ -418,10 +424,7 @@ export default function AdminLayout() {
                         <li className={`nav-item ${activeTab === 'subscriptions' ? 'active' : ''}`} onClick={() => setActiveTab('subscriptions')}>
                             <i className="fa-solid fa-crown"></i> Subscriptions
                         </li>
-                        
-                        {/* Updated to FinanceTab Navigation */}
                         <li className={`nav-item ${activeTab === 'finance' ? 'active' : ''}`} onClick={() => setActiveTab('finance')}><i className="fa-solid fa-coins"></i> Finance</li>
-                        
                         <li className={`nav-item ${activeTab === 'promocodes' ? 'active' : ''}`} onClick={() => setActiveTab('promocodes')}><i className="fa-solid fa-tags"></i> Promo Codes</li>
                         <li className={`nav-item ${activeTab === 'messages' ? 'active' : ''}`} onClick={() => setActiveTab('messages')}>
                             <i className="fa-solid fa-envelope"></i> Inbox

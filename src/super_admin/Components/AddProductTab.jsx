@@ -24,7 +24,8 @@ export default function AddProductTab({ getAuthHeaders, refreshInventory, onComp
         sellerName: "", brandName: "", sellerPhone: "", sellerEmail: "", sellerAddress: "",
         pickupAddress: "", city: "", state: "", pincode: "", allow_cod: true, allow_online: true,
         return_policy: "7_day_return_replace", package_weight: "Under 500g", dispatch_time: "Ships in 2-3 Days",
-        placement: "regular" // Admin exclusive
+        placement: "regular", // Admin exclusive
+        approval_status: "approved" // Admin exclusive
     });
 
     // --- Advanced Specs State ---
@@ -84,7 +85,8 @@ export default function AddProductTab({ getAuthHeaders, refreshInventory, onComp
                 department: parts[1] ? parts[1].trim() : '',
                 category: parts[0] ? parts[0].trim() : '',
                 allow_cod: editingProduct.allow_cod !== false,
-                allow_online: editingProduct.allow_online !== false
+                allow_online: editingProduct.allow_online !== false,
+                approval_status: editingProduct.approval_status || "approved"
             }));
 
             // Map images into fixed 5 slots
@@ -225,6 +227,9 @@ export default function AddProductTab({ getAuthHeaders, refreshInventory, onComp
                 sizingData.available_sizes = Object.keys(sizingData.size_chart);
             }
 
+            // Force global status to "hidden" if approval status is not "approved"
+            const globalStatus = formData.approval_status === "approved" ? "active" : "hidden";
+
             const productData = {
                 ...formData,
                 original_price: parseFloat(formData.original_price) || 0,
@@ -237,7 +242,8 @@ export default function AddProductTab({ getAuthHeaders, refreshInventory, onComp
                 care_instructions: careInstructions,
                 ...sizingData,
                 isHidden: editingProduct ? editingProduct.isHidden : false,
-                approval_status: editingProduct ? editingProduct.approval_status : "approved"
+                status: globalStatus,
+                approval_status: formData.approval_status
             };
             delete productData.department;
 
@@ -345,7 +351,6 @@ export default function AddProductTab({ getAuthHeaders, refreshInventory, onComp
                 <span className="section-subtitle">Product Categories & Sizing</span>
                 <div className="field-grid">
                     
-                    {/* 🔥 UPDATED: Dynamic Department Dropdown */}
                     <div className="form-group">
                         <span className="label">Department / Gender</span> 
                         <select name="department" className="input-box" required value={formData.department} onChange={(e) => setFormData(p => ({...p, department: e.target.value, category: ""}))} disabled={isSubmitting} style={{textTransform: 'capitalize'}}>
@@ -356,7 +361,6 @@ export default function AddProductTab({ getAuthHeaders, refreshInventory, onComp
                         </select>
                     </div>
 
-                    {/* 🔥 UPDATED: Dynamic Category Dropdown */}
                     <div className="form-group">
                         <span className="label">Category</span>
                         <select name="category" className="input-box" required value={formData.category} onChange={handleChange} disabled={!formData.department || isSubmitting} style={{textTransform: 'capitalize'}}>
@@ -366,12 +370,23 @@ export default function AddProductTab({ getAuthHeaders, refreshInventory, onComp
                             ))}
                         </select>
                     </div>
+                </div>
 
+                {/* 🔥 NEW: ADMIN OVERRIDES SECTION */}
+                <div className="field-grid" style={{ background: '#fdf4ff', padding: '16px', borderRadius: '8px', border: '1px solid #f5d0fe', marginBottom: '20px' }}>
                     <div className="form-group">
-                        <span className="label" style={{ color: 'var(--accent)' }}>Placement Visibility (Admin)</span>
-                        <select name="placement" value={formData.placement} onChange={handleChange} className="input-box" required disabled={isSubmitting}>
+                        <span className="label" style={{ color: '#86198f', fontWeight: 'bold' }}>Placement Visibility (Admin)</span>
+                        <select name="placement" value={formData.placement} onChange={handleChange} className="input-box" required disabled={isSubmitting} style={{ borderColor: '#e879f9' }}>
                             <option value="regular">Regular Collection Only</option>
                             <option value="hero">Homepage Hero (Display on Front Page)</option>
+                        </select>
+                    </div>
+                    <div className="form-group">
+                        <span className="label" style={{ color: '#86198f', fontWeight: 'bold' }}>Approval Status (Admin)</span>
+                        <select name="approval_status" value={formData.approval_status} onChange={handleChange} className="input-box" required disabled={isSubmitting} style={{ borderColor: '#e879f9' }}>
+                            <option value="approved">Approved (Live on Store)</option>
+                            <option value="pending">Pending Review (Hidden)</option>
+                            <option value="rejected">Rejected (Returned to Seller)</option>
                         </select>
                     </div>
                 </div>

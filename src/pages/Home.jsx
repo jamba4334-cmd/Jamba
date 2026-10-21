@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { API_BASE_URL } from '../apiConfig'; // Added API import
 import BannerLink from '../components/BannerLink';
 import './Home.css';
 
@@ -39,7 +40,6 @@ const PromoCarousel = ({ block }) => {
 
     const handleTouchEnd = (e) => {
         if (!isSwiping) return;
-        
         const endX = e.changedTouches[0].clientX;
         const diffX = startX - endX;
         setDragDistance(Math.abs(diffX));
@@ -49,7 +49,6 @@ const PromoCarousel = ({ block }) => {
         } else if (diffX < -50) {
             setCurrentIndex((prev) => (prev === 0 ? slides.length - 1 : prev - 1));
         }
-
         setIsSwiping(false);
         startAutoplay(); 
     };
@@ -113,29 +112,21 @@ export default function Home() {
   const navigate = useNavigate();
    
   const [homeBlocks, setHomeBlocks] = useState([]);
-  const [brandProfiles, setBrandProfiles] = useState({}); // 🔥 NEW: Store live brand logos
+  const [brandProfiles, setBrandProfiles] = useState({}); 
   const [loading, setLoading] = useState(true);
-
-  // --- Network State ---
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [fetchError, setFetchError] = useState(false);
 
   useEffect(() => {
-    const handleOnline = () => {
-        setIsOffline(false);
-        window.location.reload(); 
-    };
+    const handleOnline = () => { setIsOffline(false); window.location.reload(); };
     const handleOffline = () => setIsOffline(true);
-
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
-  // ---------------------------
 
   useEffect(() => {
     async function fetchDynamicLayout() {
@@ -144,6 +135,7 @@ export default function Home() {
           return;
       }
       try {
+        // 1. Fetch Homepage Layout 
         const settingsRef = doc(db, "settings", "home_layout"); 
         const settingsSnap = await getDoc(settingsRef);
         
@@ -154,20 +146,20 @@ export default function Home() {
           }
         }
 
-        // 🔥 NEW: Fetch seller profiles to override static homepage images with live Storefront logos
-        const profilesSnap = await getDocs(collection(db, "seller_profiles"));
-        const profilesMap = {};
-        profilesSnap.forEach(profileDoc => {
-            const pData = profileDoc.data();
-            if (pData.storefront && pData.storefront.vanityHandle) {
-                profilesMap[pData.storefront.vanityHandle.toLowerCase()] = pData.storefront;
+        // 2. 🔥 SECURE FETCH: Get Storefront Logos via Python Backend Cache
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/v1/public/storefronts`);
+            if (res.ok) {
+                const profilesMap = await res.json();
+                setBrandProfiles(profilesMap);
             }
-        });
-        setBrandProfiles(profilesMap);
+        } catch (apiError) {
+            console.error("Failed to load storefront logos securely", apiError);
+        }
 
       } catch (error) {
         console.error("Error fetching homepage layout:", error);
-        setFetchError(true); // Flag if internet drops mid-fetch
+        setFetchError(true); 
       } finally {
         setLoading(false);
       }
@@ -186,17 +178,12 @@ export default function Home() {
           </div>
           <p className="loader-tagline">Elevate your culture</p>
         </div>
-
-        <div className="loader-bar" aria-hidden="true">
-          <span></span>
-        </div>
-
+        <div className="loader-bar" aria-hidden="true"><span></span></div>
         <p className="loader-caption">Loading storefront</p>
       </div>
     );
   }
 
-  // --- Offline View ---
   if (isOffline || fetchError) {
       return (
           <div className="home-container">
@@ -214,18 +201,14 @@ export default function Home() {
               </div>
               <h2 className="offline-title">Connection Lost</h2>
               <p className="offline-desc">Please check your network settings and try again.</p>
-              <button className="offline-retry-btn" onClick={() => window.location.reload()}>
-                Try Again
-              </button>
+              <button className="offline-retry-btn" onClick={() => window.location.reload()}>Try Again</button>
             </div>
           </div>
       );
   }
-  // ---------------------------
 
   return (
      <div className="home-container">
-
       <div className="category-scroll">
         <span className="chip active">All</span>
         <span className="chip" onClick={() => navigate('/category/men')}>Men's</span>
@@ -234,31 +217,24 @@ export default function Home() {
       </div>
 
       {homeBlocks.length > 0 ? homeBlocks.map((block) => {
-          
-          // Render Promo Banner
           if (block.type === 'promo-banner') {
               return <PromoCarousel key={block.id} block={block} />;
           }
           
-          // Render Circle Row (Featured Brands)
           if (block.type === 'row' && block.shape === 'circle') {
               return (
                   <div key={block.id} className="circle-row-wrapper" style={{ backgroundColor: block.bgColor || 'transparent' }}>
-                      
                       {block.title && (
                           <div className="circle-header">
                               <h2 className="circle-title">{block.title}</h2>
                           </div>
                       )}
-
                       <div className="circle-scroll">
                           {block.items.map((item, idx) => {
                               const isBrandShop = item.link && item.link.startsWith('/shop/');
-                              
                               let displayImage = item.image;
                               let displayName = item.name;
 
-                              // 🔥 NEW LOGIC: Override with live Brand Logo from Storefront Editor settings
                               if (isBrandShop) {
                                   const handle = item.link.replace('/shop/', '').toLowerCase();
                                   const brandData = brandProfiles[handle];
@@ -292,7 +268,6 @@ export default function Home() {
               );
           }
 
-          // Render Product Cards (Rectangle Row)
           if (block.type === 'row' && block.shape === 'rectangle') {
               return (
                   <div key={block.id} className="bubble-wrapper">
@@ -303,7 +278,6 @@ export default function Home() {
                                   <i className="fa-solid fa-arrow-right"></i>
                               </button>
                           </div>
-                          
                           <div className="bubble-scroll">
                               {block.items.map((item, idx) => {
                                   const price = Number(item.price || 0);
@@ -317,7 +291,6 @@ export default function Home() {
                                           <div className="min-product-info">
                                               <p className="min-title">{item.name}</p>
                                               <p className="min-brand">{item.brand || 'JAMBA'}</p>
-                                              
                                               <div className="min-price-row">
                                                   <span className="min-current-price">₹{price.toLocaleString('en-IN')}</span>
                                                   {originalPrice > price && (
@@ -341,7 +314,6 @@ export default function Home() {
               <p>Please configure your homepage layout in the Admin Panel.</p>
           </div>
       )}
-
     </div>
   );
 }

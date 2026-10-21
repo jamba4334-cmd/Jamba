@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, getDocs, deleteDoc, doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import './Wishlist.css'; // 🔥 Link to the new CSS file
+import { API_BASE_URL } from '../apiConfig';
+import './Wishlist.css'; 
 
 export default function Wishlist() {
   const navigate = useNavigate();
-  const { user } = useAuth(); // 🔥 FIX: Changed currentUser to user
+  const { user } = useAuth(); 
   
   const [wishlistItems, setWishlistItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,20 +20,15 @@ export default function Wishlist() {
       }
 
       try {
-        const q = query(collection(db, 'users', user.uid, 'wishlist'));
-        const querySnapshot = await getDocs(q);
+        const token = await user.getIdToken();
+        const response = await fetch(`${API_BASE_URL}/api/v1/customer/wishlist`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
         
-        const items = [];
-        for (const docSnap of querySnapshot.docs) {
-          const itemData = docSnap.data();
-          const productRef = doc(db, 'products', itemData.productId);
-          const productSnap = await getDoc(productRef);
-          
-          if (productSnap.exists()) {
-            items.push({ id: productSnap.id, ...productSnap.data() });
-          }
+        if (response.ok) {
+            const items = await response.json();
+            setWishlistItems(items);
         }
-        setWishlistItems(items);
       } catch (error) {
         console.error("Error fetching wishlist:", error);
       } finally {
@@ -49,7 +43,15 @@ export default function Wishlist() {
     if (!user) return;
     
     try {
-      await deleteDoc(doc(db, 'users', user.uid, 'wishlist', productId));
+      const token = await user.getIdToken();
+      await fetch(`${API_BASE_URL}/api/v1/customer/wishlist`, {
+          method: 'DELETE',
+          headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ productId })
+      });
       setWishlistItems(prev => prev.filter(item => item.id !== productId));
     } catch (error) {
       console.error("Error removing from wishlist:", error);

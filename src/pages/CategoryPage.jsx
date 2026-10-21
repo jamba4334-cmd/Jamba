@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { API_BASE_URL } from '../apiConfig';
 import './CategoryPage.css'; 
 
 export default function CategoryPage() {
   const { category, subcategory } = useParams(); 
   const navigate = useNavigate();
   
-  // Track the current URL to highlight the correct chip dynamically
   const location = useLocation();
   const currentPath = location.pathname;
   
@@ -19,12 +17,12 @@ export default function CategoryPage() {
     async function fetchDynamicPage() {
       setLoading(true);
       try {
-        const settingsRef = doc(db, "settings", "tribe_categories");
-        const settingsSnap = await getDoc(settingsRef);
+        const response = await fetch(`${API_BASE_URL}/api/v1/public/config/tribe_categories`);
         let matchedTribe = null;
 
-        if (settingsSnap.exists()) {
-          const allTribes = settingsSnap.data().tribes || [];
+        if (response.ok) {
+          const data = await response.json();
+          const allTribes = data.tribes || [];
           const targetCategory = (category || "").toLowerCase();
           matchedTribe = allTribes.find(t => (t.name || "").toLowerCase().includes(targetCategory));
         }
@@ -54,7 +52,6 @@ export default function CategoryPage() {
   return (
     <div className="cat-container">
         
-      {/* THE CATEGORY NAVIGATION BAR */}
       <div className="category-scroll">
         <span 
           className={`chip ${currentPath === '/' ? 'active' : ''}`} 
@@ -98,10 +95,6 @@ export default function CategoryPage() {
     </div>
   );
 }
-
-/* =========================================================
-   DYNAMIC BLOCK COMPONENTS 
-   ========================================================= */
 
 const StorefrontBanner = ({ block, navigate }) => {
     const [currentIdx, setCurrentIdx] = useState(0);

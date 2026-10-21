@@ -17,11 +17,9 @@ import MessagesTab from "./MessagesTab";
 import SellerFooter from "./SellerFooter";
 import SellerPromoTab from "./SellerPromoTab"; 
 
-// 🔥 NEW: Import the Storefront and Subscription Tabs
 import SellerSubscription from "./SellerSubscription";
 import SellerStorefrontEditor from "./SellerStorefrontEditor";
 
-// SECURED: Firebase Initialization using .env
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY, 
     authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -119,8 +117,6 @@ export default function SellerDashboard() {
                     const docRef = doc(db, "authorized_sellers", user.email);
                     const docSnap = await getDoc(docRef);
                     if (!docSnap.exists()) {
-                        // Not approved yet: send them to onboarding, which shows
-                        // the application form, "under review", or the rejection notice.
                         window.location.replace('/sell-with-us');
                         return;
                     }
@@ -154,7 +150,7 @@ export default function SellerDashboard() {
                 } catch (err) {
                     console.error("Verification failed", err);
                     if (err && err.code === "permission-denied") {
-                        setAuthError("Verification was blocked by database permissions. Please contact support — this is a configuration issue, not a problem with your account.");
+                        setAuthError("Verification was blocked by database permissions. Please contact support.");
                     } else {
                         setAuthError("Verification failed due to a network or server issue. Please try again in a moment.");
                     }
@@ -181,36 +177,13 @@ export default function SellerDashboard() {
 
     const loadSellerOrders = async (email, profileData) => {
         try {
-            const q = query(collection(db, "orders"), where("sellerEmails", "array-contains", email));
-            const querySnapshot = await getDocs(q);
-            
-            let ordersList = [];
-            
-            querySnapshot.forEach(document => {
-                const orderData = document.data();
-                
-                if(orderData.items) {
-                    const myFilteredItems = orderData.items.filter(orderItem => {
-                        const matchEmail = orderItem.sellerEmail && orderItem.sellerEmail.toLowerCase() === email.toLowerCase();
-                        const matchBrand = orderItem.brandName && profileData.brandName && orderItem.brandName.toLowerCase() === profileData.brandName.toLowerCase();
-                        
-                        return matchEmail || matchBrand;
-                    });
-
-                    if(myFilteredItems.length > 0) {
-                        const mySubtotal = myFilteredItems.reduce((sum, item) => sum + ((item.price || item.selling_price || 0) * (item.quantity || 1)), 0);
-                        ordersList.push({ 
-                            id: document.id, 
-                            ...orderData, 
-                            items: myFilteredItems, 
-                            sellerSubtotal: mySubtotal 
-                        });
-                    }
-                }
+            const headers = await getAuthHeaders();
+            const response = await fetch(`${API_BASE_URL}/api/v1/seller/orders`, {
+                method: 'GET',
+                headers: headers
             });
-
-            ordersList.sort((a, b) => new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0));
-            
+            if (!response.ok) throw new Error("Failed to fetch secure orders");
+            const ordersList = await response.json();
             setSellerOrders(ordersList);
             setLoadingData(false);
         } catch (error) { 
@@ -295,7 +268,12 @@ export default function SellerDashboard() {
     const acceptOrder = async (orderId) => {
         if(window.confirm("By accepting, you confirm you have this item in stock and will prepare it for pickup.")) {
             try {
-                await updateDoc(doc(db, "orders", orderId), { seller_accepted: true, accepted_at: new Date().toISOString() });
+                const headers = await getAuthHeaders();
+                const response = await fetch(`${API_BASE_URL}/api/v1/seller/orders/${orderId}/accept`, {
+                    method: 'POST',
+                    headers: headers
+                });
+                if (!response.ok) throw new Error("Failed to accept order");
                 if(window.showToast) window.showToast("Order Accepted Successfully!");
                 loadSellerOrders(sellerEmail, sellerProfile); 
             } catch(e) { alert("Error accepting order: " + e.message); }
@@ -725,7 +703,7 @@ export default function SellerDashboard() {
             district: selectedDistrict,
             pincode: document.getElementById('prof-pincode').value,
             pickupAddress: sameAsPermanent ? document.getElementById('prof-address').value : document.getElementById('pickup-address').value,
-            pickupTown: sameAsPermanent ? document.getElementById('pickup-town').value : document.getElementById('pickup-town').value,
+            pickupTown: sameAsPermanent ? document.getElementById('prof-town').value : document.getElementById('pickup-town').value,
             pickupState: sameAsPermanent ? selectedState : selectedPickupState,
             pickupDistrict: sameAsPermanent ? selectedDistrict : selectedPickupDistrict,
             pickupPincode: sameAsPermanent ? document.getElementById('prof-pincode').value : document.getElementById('pickup-pincode').value,
@@ -815,7 +793,6 @@ export default function SellerDashboard() {
                     <li className={`nav-item ${activeTab === 'add-product' ? 'active' : ''}`} onClick={() => setActiveTab('add-product')}><i className="fa-solid fa-plus"></i> Submit Product</li>
                     <li className={`nav-item ${activeTab === 'payouts' ? 'active' : ''}`} onClick={() => setActiveTab('payouts')}><i className="fa-solid fa-wallet"></i> Earnings & Payouts</li>
                     
-                    {/* 🔥 NEW: Storefront and Subscription Tabs */}
                     <li className={`nav-item ${activeTab === 'storefront' ? 'active' : ''}`} onClick={() => setActiveTab('storefront')}><i className="fa-solid fa-palette"></i> Storefront Editor</li>
                     <li className={`nav-item ${activeTab === 'subscription' ? 'active' : ''}`} onClick={() => setActiveTab('subscription')}><i className="fa-solid fa-crown"></i> Subscriptions</li>
 
@@ -852,7 +829,6 @@ export default function SellerDashboard() {
 
                 {activeTab === 'promos' && <SellerPromoTab getAuthHeaders={getAuthHeaders} />}
                 
-                {/* 🔥 FIXED: Now passing getAuthHeaders and sellerEmail into the Storefront component */}
                 {activeTab === 'storefront' && <SellerStorefrontEditor getAuthHeaders={getAuthHeaders} sellerEmail={sellerEmail} />}
 
                 {activeTab === 'subscription' && <SellerSubscription />}

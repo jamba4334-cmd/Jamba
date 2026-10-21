@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from "../apiConfig.js";
 import './AddProductTab.css'; 
 
 export default function AddProductTab({ 
+    getAuthHeaders,
     isActive, 
     handleProductSubmit, 
     editingProductId, 
@@ -17,66 +19,110 @@ export default function AddProductTab({
     isUploading,
     uploadProgress
 }) {
-    const [payout, setPayout] = useState("");
-    const [platformFee, setPlatformFee] = useState(0);
-    const [gstIncluded, setGstIncluded] = useState(0);
-    const [gstRate, setGstRate] = useState(5);
-    const [finalPrice, setFinalPrice] = useState(0);
+    const [sellingPrice, setSellingPrice] = useState("");
+    const [hasGst, setHasGst] = useState(false); 
+    const [taxConfig, setTaxConfig] = useState({
+        commissionBrackets: [
+            { maxLimit: 1499, rate: 25.0 },
+            { maxLimit: 3999, rate: 18.0 },
+            { maxLimit: 999999, rate: 10.0 }
+        ],
+        tcsRate: 1.0,
+        gstBrackets: [
+            { maxLimit: 2500, rate: 5.0 },
+            { maxLimit: 999999, rate: 18.0 }
+        ]
+    });
+    
+    const [pricingPreview, setPricingPreview] = useState({
+        payout: 0, platformFee: 0, appliedCommRate: 25, commissionGst: 0, tcs: 0, productGst: 0, appliedGstRate: 18
+    });
 
     const [department, setDepartment] = useState("");
     const [category, setCategory] = useState("");
     const [returnPolicy, setReturnPolicy] = useState("7_day_return_replace");
+    const [hsnCode, setHsnCode] = useState("6204"); 
 
     const categoryData = {
-        "Men": [
-            { name: "Shirt", type: "chart_top_standard" },
-            { name: "T-Shirt", type: "chart_top_standard" },
-            { name: "Waistcoat", type: "chart_top_standard" },
-            { name: "Trouser", type: "chart_bottom" },
-            { name: "Gamsa", type: "free_size" }
-        ],
-        "Women": [
-            { name: "Blows", type: "chart_blouse" },
-            { name: "T-Shirt", type: "chart_top_standard" },
-            { name: "Dokhona", type: "free_size" },
-            { name: "Fasra", type: "free_size" },
-            { name: "Jwmgra", type: "free_size" },
-            { name: "Shirt", type: "chart_top_standard" },
-            { name: "Waist Coat", type: "chart_top_standard" },
-            { name: "Trouser", type: "chart_bottom" }
-        ],
-        "Accessories": [
-            { name: "Aronai", type: "free_size" },
-            { name: "Bag", type: "free_size" },
-            { name: "Flowers", type: "free_size" }
-        ]
+        "Men": [{ name: "Shirt", type: "chart_top_standard" }, { name: "T-Shirt", type: "chart_top_standard" }, { name: "Waistcoat", type: "chart_top_standard" }, { name: "Trouser", type: "chart_bottom" }, { name: "Gamsa", type: "free_size" }],
+        "Women": [{ name: "Blows", type: "chart_blouse" }, { name: "T-Shirt", type: "chart_top_standard" }, { name: "Dokhona", type: "free_size" }, { name: "Fasra", type: "free_size" }, { name: "Jwmgra", type: "free_size" }, { name: "Shirt", type: "chart_top_standard" }, { name: "Waist Coat", type: "chart_top_standard" }, { name: "Trouser", type: "chart_bottom" }],
+        "Accessories": [{ name: "Aronai", type: "free_size" }, { name: "Bag", type: "free_size" }, { name: "Flowers", type: "free_size" }]
     };
 
     useEffect(() => {
-        const val = parseFloat(payout);
-        if (!isNaN(val) && val > 0) {
-            const total = val / 0.70;
-            const fee = total - val; 
-            const rate = total > 2500 ? 18 : 5;
-            const basePrice = total / (1 + (rate / 100));
-            const tax = total - basePrice;
+        const fetchData = async () => {
+            try {
+                // A. Fetch Public Settings (Commission Slabs & Tax Slabs)
+                const taxRes = await fetch(`${API_BASE_URL}/api/v1/public/settings/financial`);
+                if (taxRes.ok) {
+                    const data = await taxRes.json();
+                    if (data && Object.keys(data).length > 0) {
+                        setTaxConfig(prev => ({
+                            commissionBrackets: data.commissionBrackets?.length ? data.commissionBrackets.sort((a,b) => a.maxLimit - b.maxLimit) : prev.commissionBrackets,
+                            tcsRate: data.tcsRate ?? prev.tcsRate,
+                            gstBrackets: data.gstBrackets?.length ? data.gstBrackets.sort((a,b) => a.maxLimit - b.maxLimit) : prev.gstBrackets
+                        }));
+                    }
+                }
 
-            setPlatformFee(fee);
-            setGstIncluded(tax);
-            setGstRate(rate);
-            setFinalPrice(total);
+                // B. Fetch Seller KYC Status
+                if (getAuthHeaders) {
+                    const headers = await getAuthHeaders();
+                    const dashRes = await fetch(`${API_BASE_URL}/api/v1/seller/dashboard`, { headers });
+                    if (dashRes.ok) {
+                        const dashData = await dashRes.json();
+                        setHasGst(dashData.hasGst === true);
+                    }
+                }
+            } catch (error) { console.error("Could not fetch configurations", error); }
+        };
+        fetchData();
+    }, [getAuthHeaders]);
+
+    // 2. Exact Server Math Recreation (SLAB MODE)
+    useEffect(() => {
+        const sp = parseFloat(sellingPrice);
+        if (!isNaN(sp) && sp > 0) {
+            
+            // A. Find Dynamic Commission Slab
+            let commRate = 30.0;
+            for (const bracket of taxConfig.commissionBrackets) {
+                if (sp <= bracket.maxLimit) {
+                    commRate = bracket.rate;
+                    break;
+                }
+            }
+
+            // B. Find GST Slab
+            let gstRate = 18.0;
+            for (const bracket of taxConfig.gstBrackets) {
+                if (sp <= bracket.maxLimit) {
+                    gstRate = bracket.rate;
+                    break;
+                }
+            }
+
+            const jambaFee = sp * (commRate / 100);
+            const commGst = jambaFee * 0.18;
+            const netProductValue = sp / (1 + (gstRate / 100));
+            const tcs = hasGst ? (netProductValue * (taxConfig.tcsRate / 100)) : 0.0;
+
+            setPricingPreview({
+                payout: sp - jambaFee - commGst - tcs,
+                platformFee: jambaFee,
+                appliedCommRate: commRate,
+                commissionGst: commGst,
+                tcs,
+                productGst: sp - netProductValue,
+                appliedGstRate: gstRate
+            });
             
             const priceEl = document.getElementById('p-price');
-            if(priceEl) priceEl.value = total.toFixed(2);
+            if(priceEl) priceEl.value = sp.toFixed(2);
         } else {
-            setPlatformFee(0);
-            setGstIncluded(0);
-            setGstRate(5);
-            setFinalPrice(0);
-            const priceEl = document.getElementById('p-price');
-            if(priceEl) priceEl.value = 0;
+            setPricingPreview({ payout: 0, platformFee: 0, appliedCommRate: 0, commissionGst: 0, tcs: 0, productGst: 0, appliedGstRate: 18 });
         }
-    }, [payout]);
+    }, [sellingPrice, taxConfig, hasGst]);
 
     useEffect(() => {
         if (isActive && editingProductId) {
@@ -92,10 +138,11 @@ export default function AddProductTab({
     }, [isActive, editingProductId]);
 
     const onCancel = () => {
-        setPayout("");
+        setSellingPrice("");
         setDepartment("");
         setCategory("");
         setReturnPolicy("7_day_return_replace");
+        setHsnCode("6204");
         cancelEdit();
     };
 
@@ -104,100 +151,44 @@ export default function AddProductTab({
         const found = categoryData[department]?.find(c => c.name === category);
         return found ? found.type : null;
     };
-
     const sizingType = currentSizingType();
 
-    // 🔥 LOGIC: Calculate total stock dynamically based on sizes
     const calculateTotalStock = () => {
         const sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
         let total = 0;
         sizes.forEach(sz => {
             const chk = document.getElementById(`sz-chk-${sz}`);
             if (chk && chk.checked) {
-                const stockVal = parseInt(document.getElementById(`sz-${sz}-stock`)?.value) || 0;
-                total += stockVal;
+                total += parseInt(document.getElementById(`sz-${sz}-stock`)?.value) || 0;
             }
         });
         const stockEl = document.getElementById('p-stock');
         if (stockEl) stockEl.value = total;
     };
 
-    // Auto-Fill Measurements & Clear Stock Logic
     const handleSizeCheck = (e, type, code) => {
         const isChecked = e.target.checked;
         if (isChecked) {
             if (type === 'chart_top_standard') {
-                const defaults = {
-                    'S': { chest: 36, shoulder: 16, length: 27, sleeve: 24 },
-                    'M': { chest: 38, shoulder: 17, length: 28, sleeve: 24.5 },
-                    'L': { chest: 40, shoulder: 18, length: 29, sleeve: 25 },
-                    'XL': { chest: 42, shoulder: 19, length: 30, sleeve: 25.5 },
-                    'XXL': { chest: 44, shoulder: 19.5, length: 30.5, sleeve: 26 },
-                    'XXXL': { chest: 46, shoulder: 20, length: 31, sleeve: 26.5 }
-                };
-                if(defaults[code]) {
-                    document.getElementById(`sz-${code}-chest`).value = defaults[code].chest;
-                    document.getElementById(`sz-${code}-shoulder`).value = defaults[code].shoulder;
-                    document.getElementById(`sz-${code}-length`).value = defaults[code].length;
-                    document.getElementById(`sz-${code}-sleeve`).value = defaults[code].sleeve;
-                }
+                const defaults = { 'S': { chest: 36, shoulder: 16, length: 27, sleeve: 24 }, 'M': { chest: 38, shoulder: 17, length: 28, sleeve: 24.5 }, 'L': { chest: 40, shoulder: 18, length: 29, sleeve: 25 }, 'XL': { chest: 42, shoulder: 19, length: 30, sleeve: 25.5 }, 'XXL': { chest: 44, shoulder: 19.5, length: 30.5, sleeve: 26 }, 'XXXL': { chest: 46, shoulder: 20, length: 31, sleeve: 26.5 } };
+                if(defaults[code]) { document.getElementById(`sz-${code}-chest`).value = defaults[code].chest; document.getElementById(`sz-${code}-shoulder`).value = defaults[code].shoulder; document.getElementById(`sz-${code}-length`).value = defaults[code].length; document.getElementById(`sz-${code}-sleeve`).value = defaults[code].sleeve; }
             } else if (type === 'chart_blouse') {
-                const defaults = {
-                    'XS': { bust: 32, waist: 26, shoulder: 13.5, armhole: 14 },
-                    'S': { bust: 34, waist: 28, shoulder: 14, armhole: 15 },
-                    'M': { bust: 36, waist: 30, shoulder: 14.5, armhole: 16 },
-                    'L': { bust: 38, waist: 32, shoulder: 15, armhole: 17 },
-                    'XL': { bust: 40, waist: 34, shoulder: 15.5, armhole: 18 },
-                    'XXL': { bust: 42, waist: 36, shoulder: 16, armhole: 19 }
-                };
-                if(defaults[code]) {
-                    document.getElementById(`sz-${code}-bust`).value = defaults[code].bust;
-                    document.getElementById(`sz-${code}-waist`).value = defaults[code].waist;
-                    document.getElementById(`sz-${code}-shoulder`).value = defaults[code].shoulder;
-                    document.getElementById(`sz-${code}-armhole`).value = defaults[code].armhole;
-                }
+                const defaults = { 'XS': { bust: 32, waist: 26, shoulder: 13.5, armhole: 14 }, 'S': { bust: 34, waist: 28, shoulder: 14, armhole: 15 }, 'M': { bust: 36, waist: 30, shoulder: 14.5, armhole: 16 }, 'L': { bust: 38, waist: 32, shoulder: 15, armhole: 17 }, 'XL': { bust: 40, waist: 34, shoulder: 15.5, armhole: 18 }, 'XXL': { bust: 42, waist: 36, shoulder: 16, armhole: 19 } };
+                if(defaults[code]) { document.getElementById(`sz-${code}-bust`).value = defaults[code].bust; document.getElementById(`sz-${code}-waist`).value = defaults[code].waist; document.getElementById(`sz-${code}-shoulder`).value = defaults[code].shoulder; document.getElementById(`sz-${code}-armhole`).value = defaults[code].armhole; }
             } else if (type === 'chart_bottom') {
-                const defaults = {
-                    'S': { waist: 30, hip: 38, length: 38 },
-                    'M': { waist: 32, hip: 40, length: 39 },
-                    'L': { waist: 34, hip: 42, length: 40 },
-                    'XL': { waist: 36, hip: 44, length: 41 },
-                    'XXL': { waist: 38, hip: 46, length: 41.5 },
-                    'XXXL': { waist: 40, hip: 48, length: 42 }
-                };
-                if(defaults[code]) {
-                    document.getElementById(`sz-${code}-waist`).value = defaults[code].waist;
-                    document.getElementById(`sz-${code}-hip`).value = defaults[code].hip;
-                    document.getElementById(`sz-${code}-length`).value = defaults[code].length;
-                }
+                const defaults = { 'S': { waist: 30, hip: 38, length: 38 }, 'M': { waist: 32, hip: 40, length: 39 }, 'L': { waist: 34, hip: 42, length: 40 }, 'XL': { waist: 36, hip: 44, length: 41 }, 'XXL': { waist: 38, hip: 46, length: 41.5 }, 'XXXL': { waist: 40, hip: 48, length: 42 } };
+                if(defaults[code]) { document.getElementById(`sz-${code}-waist`).value = defaults[code].waist; document.getElementById(`sz-${code}-hip`).value = defaults[code].hip; document.getElementById(`sz-${code}-length`).value = defaults[code].length; }
             }
         } else {
-            // Clear all fields if unchecked
             const stockEl = document.getElementById(`sz-${code}-stock`);
             if (stockEl) stockEl.value = '';
-
-            if (type === 'chart_top_standard') {
-                document.getElementById(`sz-${code}-chest`).value = '';
-                document.getElementById(`sz-${code}-shoulder`).value = '';
-                document.getElementById(`sz-${code}-length`).value = '';
-                document.getElementById(`sz-${code}-sleeve`).value = '';
-            } else if (type === 'chart_blouse') {
-                document.getElementById(`sz-${code}-bust`).value = '';
-                document.getElementById(`sz-${code}-waist`).value = '';
-                document.getElementById(`sz-${code}-shoulder`).value = '';
-                document.getElementById(`sz-${code}-armhole`).value = '';
-            } else if (type === 'chart_bottom') {
-                document.getElementById(`sz-${code}-waist`).value = '';
-                document.getElementById(`sz-${code}-hip`).value = '';
-                document.getElementById(`sz-${code}-length`).value = '';
-            }
+            ['chest','shoulder','length','sleeve','bust','waist','armhole','hip'].forEach(f => {
+                const el = document.getElementById(`sz-${code}-${f}`);
+                if (el) el.value = '';
+            });
         }
         setTimeout(calculateTotalStock, 50);
     };
-
-    const tableHeaderStyle = { padding: '10px', background: '#f1f5f9', borderBottom: '2px solid #cbd5e1', textAlign: 'left', fontSize: '13px', color: '#334155' };
-    const tableCellStyle = { padding: '8px', borderBottom: '1px solid #e2e8f0' };
-    const chartInputStyle = { width: '100%', padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '13px' };
 
     const renderImageSlot = (index, label, icon) => {
         const hasFile = selectedFiles[index];
@@ -247,8 +238,19 @@ export default function AddProductTab({
                 <span className="section-subtitle">Pricing & Earnings</span>
                 <div className="field-grid" style={{ marginBottom: '10px' }}>
                     <div className="form-group">
-                        <span className="label" style={{ color: 'var(--success)' }}>Your Guaranteed Payout (₹)</span>
-                        <input type="number" id="p-payout" className="input-box" placeholder="e.g. 1000" value={payout} onChange={(e) => setPayout(e.target.value)} required min="10" style={{ borderColor: 'var(--success)', fontWeight: 'bold' }} disabled={isUploading} />
+                        <span className="label" style={{ color: 'var(--primary)' }}>Customer Selling Price (₹)</span>
+                        <input 
+                            type="number" 
+                            id="p-price" 
+                            className="input-box" 
+                            placeholder="e.g. 1499" 
+                            value={sellingPrice} 
+                            onChange={(e) => setSellingPrice(e.target.value)} 
+                            required 
+                            min="50" 
+                            style={{ borderColor: 'var(--primary)', fontWeight: 'bold' }} 
+                            disabled={isUploading} 
+                        />
                     </div>
                     <div className="form-group">
                         <span className="label">Original MRP (Optional Strikethrough)</span>
@@ -256,26 +258,42 @@ export default function AddProductTab({
                     </div>
                 </div>
 
-                {payout && !isNaN(payout) && parseFloat(payout) > 0 && (
+                {sellingPrice && !isNaN(sellingPrice) && parseFloat(sellingPrice) > 0 && (
                     <div className="pricing-breakdown-box" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', marginBottom: '30px' }}>
-                        <h4 style={{ margin: '0 0 12px 0', color: '#0f172a', fontSize: '14px' }}><i className="fa-solid fa-calculator"></i> Retail Price Breakdown</h4>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#475569', marginBottom: '8px' }}>
-                            <span>Your Guaranteed Earnings (70%):</span>
-                            <strong>₹{parseFloat(payout).toFixed(2)}</strong>
+                        <h4 style={{ margin: '0 0 12px 0', color: '#0f172a', fontSize: '14px' }}><i className="fa-solid fa-calculator"></i> Earnings Preview (Zero-Trust Ledger)</h4>
+                        
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#0f172a', marginBottom: '8px', fontWeight: '600' }}>
+                            <span>Customer Pays:</span>
+                            <span>₹{parseFloat(sellingPrice).toFixed(2)}</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#475569', marginBottom: '2px' }}>
-                            <span>Platform Fee (30%):</span>
-                            <span>+ ₹{platformFee.toFixed(2)}</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#ef4444', marginBottom: '2px' }}>
+                            <span>Jamba Platform Fee ({pricingPreview.appliedCommRate}%):</span>
+                            <span>- ₹{pricingPreview.platformFee.toFixed(2)}</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px dashed #cbd5e1' }}>
-                            <span>↳ Includes Govt GST ({gstRate}%):</span>
-                            <span>(₹{gstIncluded.toFixed(2)})</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#ef4444', marginBottom: '2px' }}>
+                            <span>18% GST on Platform Fee:</span>
+                            <span>- ₹{pricingPreview.commissionGst.toFixed(2)}</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', color: '#0f172a', fontWeight: '700', marginTop: '12px' }}>
-                            <span>Final Price Customer Pays:</span>
-                            <span style={{ color: 'var(--primary)' }}>₹{finalPrice.toFixed(2)}</span>
+                        
+                        {hasGst ? (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#ef4444', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px dashed #cbd5e1' }}>
+                                <span>Govt Section 52 TCS ({taxConfig.tcsRate}%):</span>
+                                <span>- ₹{pricingPreview.tcs.toFixed(2)}</span>
+                            </div>
+                        ) : (
+                            <div style={{ paddingBottom: '8px', borderBottom: '1px dashed #cbd5e1' }}></div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', color: '#16a34a', fontWeight: '700', marginTop: '12px' }}>
+                            <span>Your Net Payout:</span>
+                            <span>₹{pricingPreview.payout.toFixed(2)}</span>
                         </div>
-                        <input type="hidden" id="p-price" value={finalPrice.toFixed(2)} />
+                        <div style={{ marginTop: '12px', fontSize: '11px', color: '#64748b' }}>
+                            <i className="fa-solid fa-circle-info"></i> {hasGst ? 
+                                `Dynamic Item GST (${pricingPreview.appliedGstRate}%) is already embedded inside your selling price. Jamba Wear collects and remits the ₹${pricingPreview.productGst.toFixed(2)} output tax to the government on your behalf.` :
+                                `As an unregistered artisan under GST limits, Section 52 TCS is completely waived for your account.`
+                            }
+                        </div>
                     </div>
                 )}
 
@@ -302,27 +320,23 @@ export default function AddProductTab({
                     </div>
                 </div>
 
-                {/* DYNAMIC SIZING POPUPS WITH AUTO-FILL AND STOCK */}
+                {/* DYNAMIC SIZING POPUPS */}
                 {sizingType === 'chart_top_standard' && (
                     <div style={{ marginBottom: '24px', background: '#e0f2fe', padding: '16px', borderRadius: '8px', border: '1px solid #7dd3fc', overflowX: 'auto' }}>
                         <span className="label" style={{ color: '#0369a1', fontWeight: '700', display: 'block', marginBottom: '10px' }}><i className="fa-solid fa-ruler"></i> Detailed Size Chart (Inches)</span>
                         <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
-                            <thead><tr><th style={tableHeaderStyle}>Size</th><th style={tableHeaderStyle}>Chest</th><th style={tableHeaderStyle}>Shoulder</th><th style={tableHeaderStyle}>Length</th><th style={tableHeaderStyle}>Sleeve</th><th style={tableHeaderStyle}>Stock Qty</th></tr></thead>
+                            <thead><tr><th style={{padding:'10px', background:'#f1f5f9', borderBottom:'2px solid #cbd5e1', textAlign:'left', fontSize:'13px', color:'#334155'}}>Size</th><th style={{padding:'10px', background:'#f1f5f9', borderBottom:'2px solid #cbd5e1', textAlign:'left', fontSize:'13px', color:'#334155'}}>Chest</th><th style={{padding:'10px', background:'#f1f5f9', borderBottom:'2px solid #cbd5e1', textAlign:'left', fontSize:'13px', color:'#334155'}}>Shoulder</th><th style={{padding:'10px', background:'#f1f5f9', borderBottom:'2px solid #cbd5e1', textAlign:'left', fontSize:'13px', color:'#334155'}}>Length</th><th style={{padding:'10px', background:'#f1f5f9', borderBottom:'2px solid #cbd5e1', textAlign:'left', fontSize:'13px', color:'#334155'}}>Sleeve</th><th style={{padding:'10px', background:'#f1f5f9', borderBottom:'2px solid #cbd5e1', textAlign:'left', fontSize:'13px', color:'#334155'}}>Stock Qty</th></tr></thead>
                             <tbody>
                                 {['S (36)', 'M (38)', 'L (40)', 'XL (42)', 'XXL (44)', 'XXXL (46)'].map(sz => {
                                     const code = sz.split(' ')[0];
                                     return (
                                         <tr key={code}>
-                                            <td style={tableCellStyle}>
-                                                <label style={{cursor:'pointer', fontWeight:'500'}}>
-                                                    <input type="checkbox" id={`sz-chk-${code}`} value={code} style={{ accentColor: '#0284c7', marginRight:'6px' }} disabled={isUploading} onChange={(e) => handleSizeCheck(e, 'chart_top_standard', code)}/> {sz}
-                                                </label>
-                                            </td>
-                                            <td style={tableCellStyle}><input type="number" id={`sz-${code}-chest`} style={chartInputStyle} step="0.5" disabled={isUploading}/></td>
-                                            <td style={tableCellStyle}><input type="number" id={`sz-${code}-shoulder`} style={chartInputStyle} step="0.5" disabled={isUploading}/></td>
-                                            <td style={tableCellStyle}><input type="number" id={`sz-${code}-length`} style={chartInputStyle} step="0.5" disabled={isUploading}/></td>
-                                            <td style={tableCellStyle}><input type="number" id={`sz-${code}-sleeve`} style={chartInputStyle} step="0.5" disabled={isUploading}/></td>
-                                            <td style={tableCellStyle}><input type="number" id={`sz-${code}-stock`} style={chartInputStyle} min="0" placeholder="Qty" disabled={isUploading} onKeyUp={calculateTotalStock} onChange={calculateTotalStock}/></td>
+                                            <td style={{padding:'8px', borderBottom:'1px solid #e2e8f0'}}><label style={{cursor:'pointer', fontWeight:'500'}}><input type="checkbox" id={`sz-chk-${code}`} value={code} style={{ accentColor: '#0284c7', marginRight:'6px' }} disabled={isUploading} onChange={(e) => handleSizeCheck(e, 'chart_top_standard', code)}/> {sz}</label></td>
+                                            <td style={{padding:'8px', borderBottom:'1px solid #e2e8f0'}}><input type="number" id={`sz-${code}-chest`} style={{width:'100%', padding:'6px', border:'1px solid #cbd5e1', borderRadius:'4px', fontSize:'13px'}} step="0.5" disabled={isUploading}/></td>
+                                            <td style={{padding:'8px', borderBottom:'1px solid #e2e8f0'}}><input type="number" id={`sz-${code}-shoulder`} style={{width:'100%', padding:'6px', border:'1px solid #cbd5e1', borderRadius:'4px', fontSize:'13px'}} step="0.5" disabled={isUploading}/></td>
+                                            <td style={{padding:'8px', borderBottom:'1px solid #e2e8f0'}}><input type="number" id={`sz-${code}-length`} style={{width:'100%', padding:'6px', border:'1px solid #cbd5e1', borderRadius:'4px', fontSize:'13px'}} step="0.5" disabled={isUploading}/></td>
+                                            <td style={{padding:'8px', borderBottom:'1px solid #e2e8f0'}}><input type="number" id={`sz-${code}-sleeve`} style={{width:'100%', padding:'6px', border:'1px solid #cbd5e1', borderRadius:'4px', fontSize:'13px'}} step="0.5" disabled={isUploading}/></td>
+                                            <td style={{padding:'8px', borderBottom:'1px solid #e2e8f0'}}><input type="number" id={`sz-${code}-stock`} style={{width:'100%', padding:'6px', border:'1px solid #cbd5e1', borderRadius:'4px', fontSize:'13px'}} min="0" placeholder="Qty" disabled={isUploading} onKeyUp={calculateTotalStock} onChange={calculateTotalStock}/></td>
                                         </tr>
                                     );
                                 })}
@@ -335,22 +349,18 @@ export default function AddProductTab({
                     <div style={{ marginBottom: '24px', background: '#fce7f3', padding: '16px', borderRadius: '8px', border: '1px solid #f9a8d4', overflowX: 'auto' }}>
                         <span className="label" style={{ color: '#be185d', fontWeight: '700', display: 'block', marginBottom: '10px' }}><i className="fa-solid fa-ruler"></i> Blouse Size Chart (Inches)</span>
                         <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
-                            <thead><tr><th style={{...tableHeaderStyle, background:'#fdf2f8'}}>Size</th><th style={{...tableHeaderStyle, background:'#fdf2f8'}}>Bust</th><th style={{...tableHeaderStyle, background:'#fdf2f8'}}>Waist</th><th style={{...tableHeaderStyle, background:'#fdf2f8'}}>Shoulder</th><th style={{...tableHeaderStyle, background:'#fdf2f8'}}>Armhole</th><th style={{...tableHeaderStyle, background:'#fdf2f8'}}>Stock Qty</th></tr></thead>
+                            <thead><tr><th style={{padding:'10px', background:'#fdf2f8', borderBottom:'2px solid #cbd5e1', textAlign:'left', fontSize:'13px', color:'#334155'}}>Size</th><th style={{padding:'10px', background:'#fdf2f8', borderBottom:'2px solid #cbd5e1', textAlign:'left', fontSize:'13px', color:'#334155'}}>Bust</th><th style={{padding:'10px', background:'#fdf2f8', borderBottom:'2px solid #cbd5e1', textAlign:'left', fontSize:'13px', color:'#334155'}}>Waist</th><th style={{padding:'10px', background:'#fdf2f8', borderBottom:'2px solid #cbd5e1', textAlign:'left', fontSize:'13px', color:'#334155'}}>Shoulder</th><th style={{padding:'10px', background:'#fdf2f8', borderBottom:'2px solid #cbd5e1', textAlign:'left', fontSize:'13px', color:'#334155'}}>Armhole</th><th style={{padding:'10px', background:'#fdf2f8', borderBottom:'2px solid #cbd5e1', textAlign:'left', fontSize:'13px', color:'#334155'}}>Stock Qty</th></tr></thead>
                             <tbody>
                                 {['XS (32)', 'S (34)', 'M (36)', 'L (38)', 'XL (40)', 'XXL (42)'].map(sz => {
                                     const code = sz.split(' ')[0];
                                     return (
                                         <tr key={code}>
-                                            <td style={tableCellStyle}>
-                                                <label style={{cursor:'pointer', fontWeight:'500'}}>
-                                                    <input type="checkbox" id={`sz-chk-${code}`} value={code} style={{ accentColor: '#db2777', marginRight:'6px' }} disabled={isUploading} onChange={(e) => handleSizeCheck(e, 'chart_blouse', code)}/> {sz}
-                                                </label>
-                                            </td>
-                                            <td style={tableCellStyle}><input type="number" id={`sz-${code}-bust`} style={chartInputStyle} step="0.5" disabled={isUploading}/></td>
-                                            <td style={tableCellStyle}><input type="number" id={`sz-${code}-waist`} style={chartInputStyle} step="0.5" disabled={isUploading}/></td>
-                                            <td style={tableCellStyle}><input type="number" id={`sz-${code}-shoulder`} style={chartInputStyle} step="0.5" disabled={isUploading}/></td>
-                                            <td style={tableCellStyle}><input type="number" id={`sz-${code}-armhole`} style={chartInputStyle} step="0.5" disabled={isUploading}/></td>
-                                            <td style={tableCellStyle}><input type="number" id={`sz-${code}-stock`} style={chartInputStyle} min="0" placeholder="Qty" disabled={isUploading} onKeyUp={calculateTotalStock} onChange={calculateTotalStock}/></td>
+                                            <td style={{padding:'8px', borderBottom:'1px solid #e2e8f0'}}><label style={{cursor:'pointer', fontWeight:'500'}}><input type="checkbox" id={`sz-chk-${code}`} value={code} style={{ accentColor: '#db2777', marginRight:'6px' }} disabled={isUploading} onChange={(e) => handleSizeCheck(e, 'chart_blouse', code)}/> {sz}</label></td>
+                                            <td style={{padding:'8px', borderBottom:'1px solid #e2e8f0'}}><input type="number" id={`sz-${code}-bust`} style={{width:'100%', padding:'6px', border:'1px solid #cbd5e1', borderRadius:'4px', fontSize:'13px'}} step="0.5" disabled={isUploading}/></td>
+                                            <td style={{padding:'8px', borderBottom:'1px solid #e2e8f0'}}><input type="number" id={`sz-${code}-waist`} style={{width:'100%', padding:'6px', border:'1px solid #cbd5e1', borderRadius:'4px', fontSize:'13px'}} step="0.5" disabled={isUploading}/></td>
+                                            <td style={{padding:'8px', borderBottom:'1px solid #e2e8f0'}}><input type="number" id={`sz-${code}-shoulder`} style={{width:'100%', padding:'6px', border:'1px solid #cbd5e1', borderRadius:'4px', fontSize:'13px'}} step="0.5" disabled={isUploading}/></td>
+                                            <td style={{padding:'8px', borderBottom:'1px solid #e2e8f0'}}><input type="number" id={`sz-${code}-armhole`} style={{width:'100%', padding:'6px', border:'1px solid #cbd5e1', borderRadius:'4px', fontSize:'13px'}} step="0.5" disabled={isUploading}/></td>
+                                            <td style={{padding:'8px', borderBottom:'1px solid #e2e8f0'}}><input type="number" id={`sz-${code}-stock`} style={{width:'100%', padding:'6px', border:'1px solid #cbd5e1', borderRadius:'4px', fontSize:'13px'}} min="0" placeholder="Qty" disabled={isUploading} onKeyUp={calculateTotalStock} onChange={calculateTotalStock}/></td>
                                         </tr>
                                     );
                                 })}
@@ -363,21 +373,17 @@ export default function AddProductTab({
                     <div style={{ marginBottom: '24px', background: '#ecfdf5', padding: '16px', borderRadius: '8px', border: '1px solid #6ee7b7', overflowX: 'auto' }}>
                         <span className="label" style={{ color: '#047857', fontWeight: '700', display: 'block', marginBottom: '10px' }}><i className="fa-solid fa-ruler"></i> Trouser Size Chart (Inches)</span>
                         <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
-                            <thead><tr><th style={{...tableHeaderStyle, background:'#f0fdf4'}}>Size</th><th style={{...tableHeaderStyle, background:'#f0fdf4'}}>Waist</th><th style={{...tableHeaderStyle, background:'#f0fdf4'}}>Hip</th><th style={{...tableHeaderStyle, background:'#f0fdf4'}}>Length</th><th style={{...tableHeaderStyle, background:'#f0fdf4'}}>Stock Qty</th></tr></thead>
+                            <thead><tr><th style={{padding:'10px', background:'#f0fdf4', borderBottom:'2px solid #cbd5e1', textAlign:'left', fontSize:'13px', color:'#334155'}}>Size</th><th style={{padding:'10px', background:'#f0fdf4', borderBottom:'2px solid #cbd5e1', textAlign:'left', fontSize:'13px', color:'#334155'}}>Waist</th><th style={{padding:'10px', background:'#f0fdf4', borderBottom:'2px solid #cbd5e1', textAlign:'left', fontSize:'13px', color:'#334155'}}>Hip</th><th style={{padding:'10px', background:'#f0fdf4', borderBottom:'2px solid #cbd5e1', textAlign:'left', fontSize:'13px', color:'#334155'}}>Length</th><th style={{padding:'10px', background:'#f0fdf4', borderBottom:'2px solid #cbd5e1', textAlign:'left', fontSize:'13px', color:'#334155'}}>Stock Qty</th></tr></thead>
                             <tbody>
                                 {['S (30)', 'M (32)', 'L (34)', 'XL (36)', 'XXL (38)', 'XXXL (40)'].map(sz => {
                                     const code = sz.split(' ')[0];
                                     return (
                                         <tr key={code}>
-                                            <td style={tableCellStyle}>
-                                                <label style={{cursor:'pointer', fontWeight:'500'}}>
-                                                    <input type="checkbox" id={`sz-chk-${code}`} value={code} style={{ accentColor: '#059669', marginRight:'6px' }} disabled={isUploading} onChange={(e) => handleSizeCheck(e, 'chart_bottom', code)}/> {sz}
-                                                </label>
-                                            </td>
-                                            <td style={tableCellStyle}><input type="number" id={`sz-${code}-waist`} style={chartInputStyle} step="0.5" disabled={isUploading}/></td>
-                                            <td style={tableCellStyle}><input type="number" id={`sz-${code}-hip`} style={chartInputStyle} step="0.5" disabled={isUploading}/></td>
-                                            <td style={tableCellStyle}><input type="number" id={`sz-${code}-length`} style={chartInputStyle} step="0.5" disabled={isUploading}/></td>
-                                            <td style={tableCellStyle}><input type="number" id={`sz-${code}-stock`} style={chartInputStyle} min="0" placeholder="Qty" disabled={isUploading} onKeyUp={calculateTotalStock} onChange={calculateTotalStock}/></td>
+                                            <td style={{padding:'8px', borderBottom:'1px solid #e2e8f0'}}><label style={{cursor:'pointer', fontWeight:'500'}}><input type="checkbox" id={`sz-chk-${code}`} value={code} style={{ accentColor: '#059669', marginRight:'6px' }} disabled={isUploading} onChange={(e) => handleSizeCheck(e, 'chart_bottom', code)}/> {sz}</label></td>
+                                            <td style={{padding:'8px', borderBottom:'1px solid #e2e8f0'}}><input type="number" id={`sz-${code}-waist`} style={{width:'100%', padding:'6px', border:'1px solid #cbd5e1', borderRadius:'4px', fontSize:'13px'}} step="0.5" disabled={isUploading}/></td>
+                                            <td style={{padding:'8px', borderBottom:'1px solid #e2e8f0'}}><input type="number" id={`sz-${code}-hip`} style={{width:'100%', padding:'6px', border:'1px solid #cbd5e1', borderRadius:'4px', fontSize:'13px'}} step="0.5" disabled={isUploading}/></td>
+                                            <td style={{padding:'8px', borderBottom:'1px solid #e2e8f0'}}><input type="number" id={`sz-${code}-length`} style={{width:'100%', padding:'6px', border:'1px solid #cbd5e1', borderRadius:'4px', fontSize:'13px'}} step="0.5" disabled={isUploading}/></td>
+                                            <td style={{padding:'8px', borderBottom:'1px solid #e2e8f0'}}><input type="number" id={`sz-${code}-stock`} style={{width:'100%', padding:'6px', border:'1px solid #cbd5e1', borderRadius:'4px', fontSize:'13px'}} min="0" placeholder="Qty" disabled={isUploading} onKeyUp={calculateTotalStock} onChange={calculateTotalStock}/></td>
                                         </tr>
                                     );
                                 })}
@@ -385,6 +391,7 @@ export default function AddProductTab({
                         </table>
                     </div>
                 )}
+                
                 {sizingType === 'free_size' && (
                     <div style={{ marginBottom: '24px', background: '#fef3c7', padding: '16px', borderRadius: '8px', border: '1px solid #fde68a' }}>
                         <span className="label" style={{ color: '#b45309', fontWeight: '700', display: 'block', marginBottom: '10px' }}><i className="fa-solid fa-maximize"></i> Product Dimensions (Compulsory for Free Size)</span>
@@ -400,12 +407,11 @@ export default function AddProductTab({
                 <div className="field-grid">
                     <div className="form-group"><span className="label">Product Name</span><input type="text" id="p-name" className="input-box" placeholder="e.g. Classic Bodo Waistcoat" required disabled={isUploading}/></div>
                     
-                    {/* 🔥 EXPLICIT STOCK LOGIC UI */}
                     <div className="form-group">
                         <span className="label">
                             Available Stock 
                             {sizingType?.startsWith('chart_') ? 
-                                <span style={{fontSize: '11px', color: 'var(--danger)', marginLeft: '4px'}}>(Auto-calculated from sizes)</span> : 
+                                <span style={{fontSize: '11px', color: 'var(--danger)', marginLeft: '4px'}}>(Auto-calculated)</span> : 
                                 <span style={{fontSize: '11px', color: 'var(--success)', marginLeft: '4px'}}>(Enter total quantity)</span>
                             }
                         </span>
@@ -428,9 +434,15 @@ export default function AddProductTab({
                     <div className="form-group"><span className="label">Fabric</span><input type="text" id="p-fabric" className="input-box" placeholder="e.g. Pure Cotton" required disabled={isUploading}/></div>
                 </div>
 
-                <div className="form-group" style={{ marginBottom: '20px' }}>
-                    <span className="label">Search Tags (Comma separated)</span>
-                    <input type="text" id="p-tags" className="input-box" placeholder="e.g. Bihu, Traditional, Wedding Wear" disabled={isUploading}/>
+                <div className="field-grid">
+                    <div className="form-group" style={{ marginBottom: '20px' }}>
+                        <span className="label">Search Tags (Comma separated)</span>
+                        <input type="text" id="p-tags" className="input-box" placeholder="e.g. Bihu, Traditional, Wedding Wear" disabled={isUploading}/>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '20px' }}>
+                        <span className="label">Mandatory HSN Code</span>
+                        <input type="text" id="p-hsn" className="input-box" placeholder="e.g. 6204" value={hsnCode} onChange={(e) => setHsnCode(e.target.value)} required disabled={isUploading}/>
+                    </div>
                 </div>
                 
                 <div className="form-group" style={{ marginBottom: '30px' }}>
@@ -502,15 +514,12 @@ export default function AddProductTab({
                     )}
                 </div>
 
-                {/* 🔥 STRUCTURED MEDIA UPLOAD GRID 🔥 */}
                 <div style={{ marginTop: '30px' }}>
                     <span className="section-subtitle">Product Media (Guided Setup)</span>
                     <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>Upload clear, high-quality media to maximize your sales. Front view is required.</p>
                     
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '16px' }}>
-                        
                         {renderImageSlot(0, "1. Front View (Hero)", "fa-image")}
-
                         <div style={{ border: '1px dashed var(--primary)', borderRadius: '8px', padding: '12px', textAlign: 'center', position: 'relative', background: '#eff6ff' }}>
                             <span style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '8px', color: 'var(--primary)' }}>2. Video (Optional)</span>
                             <label htmlFor="video-upload" style={{ cursor: isUploading ? 'not-allowed' : 'pointer', display: 'block' }}>
@@ -528,16 +537,13 @@ export default function AddProductTab({
                             </label>
                             <input id="video-upload" type="file" accept="video/mp4,video/quicktime" style={{ display: 'none' }} onChange={handleVideoSelect} disabled={isUploading} />
                         </div>
-
                         {renderImageSlot(1, "3. Back View", "fa-person")}
                         {renderImageSlot(2, "4. Side View", "fa-person-walking")}
                         {renderImageSlot(3, "5. Fabric Close-up", "fa-magnifying-glass-plus")}
                         {renderImageSlot(4, "6. Lifestyle", "fa-camera-retro")}
-
                     </div>
                 </div>
                 
-                {/* LIVE UPLOAD PROGRESS BAR */}
                 {isUploading && (
                     <div style={{ marginTop: '30px', padding: '16px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#166534' }}>
