@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
-import { API_BASE_URL } from '../apiConfig'; // Added API import
+import { API_BASE_URL } from '../apiConfig';
 import BannerLink from '../components/BannerLink';
 import './Home.css';
 
@@ -135,15 +133,15 @@ export default function Home() {
           return;
       }
       try {
-        // 1. Fetch Homepage Layout 
-        const settingsRef = doc(db, "settings", "home_layout"); 
-        const settingsSnap = await getDoc(settingsRef);
+        // 1. 🔥 SECURE FETCH: Fetch Homepage Layout via Flask backend proxy
+        const layoutRes = await fetch(`${API_BASE_URL}/api/v1/public/config/home_layout`);
+        if (!layoutRes.ok) {
+          throw new Error(`Failed to load homepage layout: ${layoutRes.status}`);
+        }
         
-        if (settingsSnap.exists()) {
-          const data = settingsSnap.data();
-          if (data.blocks) {
-             setHomeBlocks(data.blocks);
-          }
+        const layoutData = await layoutRes.json();
+        if (layoutData && layoutData.blocks) {
+          setHomeBlocks(layoutData.blocks);
         }
 
         // 2. 🔥 SECURE FETCH: Get Storefront Logos via Python Backend Cache
@@ -158,7 +156,7 @@ export default function Home() {
         }
 
       } catch (error) {
-        console.error("Error fetching homepage layout:", error);
+        console.error("Error fetching homepage layout via backend:", error);
         setFetchError(true); 
       } finally {
         setLoading(false);

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { db } from '../firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { API_BASE_URL } from '../apiConfig';
 
 export default function PublicShop() {
     const { handle } = useParams(); // Grabs 'bodo-weavers' from the URL
@@ -10,29 +9,36 @@ export default function PublicShop() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        // Zero-Trust Route Validation
+        const HANDLE_RE = /^[A-Za-z0-9_\-@.]{1,128}$/;
+        if (!handle || !HANDLE_RE.test(handle)) {
+            setSeller(null);
+            setLoading(false);
+            return;
+        }
+
         async function fetchStorefront() {
             try {
-                // 1. Find the seller profile using the URL handle
-                const profilesRef = collection(db, "seller_profiles");
-                const qProfile = query(profilesRef, where("storefront.vanityHandle", "==", handle));
-                const profileSnap = await getDocs(qProfile);
-
-                if (profileSnap.empty) {
+                // 1. SECURE FETCH: Find the seller profile via Python API
+                const profileRes = await fetch(`${API_BASE_URL}/api/v1/public/storefront/${handle}`);
+                
+                if (!profileRes.ok) {
                     setSeller(null);
                     setLoading(false);
                     return;
                 }
 
-                const sellerData = profileSnap.docs[0].data();
+                const sellerData = await profileRes.json();
                 setSeller(sellerData);
 
-                // 2. Fetch only the products belonging to this specific seller
-                const productsRef = collection(db, "products");
-                const qProducts = query(productsRef, where("sellerEmail", "==", sellerData.email));
-                const productSnap = await getDocs(qProducts);
-
-                const sellerProducts = productSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setProducts(sellerProducts);
+                // 2. SECURE FETCH: Pull from the Redis-cached public products catalog
+                const productsRes = await fetch(`${API_BASE_URL}/api/v1/public/products`);
+                if (productsRes.ok) {
+                    const allProducts = await productsRes.json();
+                    // Filter only products matching this seller's secure email tag
+                    const sellerProducts = allProducts.filter(p => p.sellerEmail === sellerData.sellerEmail);
+                    setProducts(sellerProducts);
+                }
                 
             } catch (error) {
                 console.error("Error loading storefront:", error);
@@ -41,9 +47,7 @@ export default function PublicShop() {
             }
         }
 
-        if (handle) {
-            fetchStorefront();
-        }
+        fetchStorefront();
     }, [handle]);
 
     // Loading State
@@ -67,7 +71,7 @@ export default function PublicShop() {
     }
 
     // Storefront Data
-    const storefront = seller.storefront || {};
+    const storefront = seller || {};
     const bannerImage = storefront.bannerUrl || 'https://via.placeholder.com/1200x400?text=Welcome+to+Our+Store';
 
     return (

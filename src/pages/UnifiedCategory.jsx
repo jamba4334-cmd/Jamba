@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebase'; 
+import { API_BASE_URL } from '../apiConfig'; 
 import './UnifiedCategory.css'; 
 
 export default function UnifiedCategory() {
@@ -15,23 +14,21 @@ export default function UnifiedCategory() {
   const [isMobileSortOpen, setIsMobileSortOpen] = useState(false);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
-  // Fetch Products
+  // Fetch Products via Secure Flask API
   useEffect(() => {
     async function fetchProducts() {
       setLoading(true);
       try {
-        const querySnapshot = await getDocs(collection(db, "products"));
-        let fetchedProducts = [];
+        const res = await fetch(`${API_BASE_URL}/api/v1/public/products`);
+        if (!res.ok) throw new Error("Failed to load catalog");
+        
+        const catalogData = await res.json();
         const targetCategory = (category || "").toLowerCase();
 
-        querySnapshot.forEach((docSnap) => {
-          const product = { id: docSnap.id, ...docSnap.data() };
-          if (product.isHidden) return; 
-
+        // Filter backend data by current category route
+        const fetchedProducts = catalogData.filter(product => {
           const prodCategory = (product.category || "").toLowerCase();
-          if (prodCategory.includes(targetCategory)) {
-             fetchedProducts.push(product);
-          }
+          return prodCategory.includes(targetCategory);
         });
 
         setAllProducts(fetchedProducts);
@@ -161,7 +158,6 @@ export default function UnifiedCategory() {
                             <i className="fa-regular fa-heart"></i>
                         </button>
                         
-                        {/* 🔥 FIXED: Only render the pill if a real rating exists in the database */}
                         {product.rating && (
                             <div className="uc-rating-pill">
                                 {product.rating} <i className="fa-solid fa-star"></i> | {product.reviewsCount || 0}
@@ -174,7 +170,6 @@ export default function UnifiedCategory() {
                         <p className="uc-title-text">{product.title}</p>
                         
                         <div className="uc-price-row">
-                            {/* 🔥 FIXED: Price is always visible, discount logic is separated */}
                             {price > 0 ? (
                                 <span className="uc-current-price">₹{price.toLocaleString('en-IN')}</span>
                             ) : (
