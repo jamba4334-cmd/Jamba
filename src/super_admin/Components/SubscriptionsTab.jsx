@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { API_BASE_URL } from "../../apiConfig.js";
+import { auth } from '../../firebase'; // Fallback token getter
 
-export default function SubscriptionsTab({ db }) {
+export default function SubscriptionsTab({ getAuthHeaders }) {
     const [sellers, setSellers] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // Fetch the data as soon as the Master Admin clicks this tab
+    const getHeaders = async () => {
+        if (getAuthHeaders) return await getAuthHeaders();
+        const token = await auth.currentUser.getIdToken();
+        return { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
+    };
+
     useEffect(() => {
         fetchSubscriptions();
     }, []);
@@ -13,22 +19,13 @@ export default function SubscriptionsTab({ db }) {
     const fetchSubscriptions = async () => {
         setLoading(true);
         try {
-            // Fetch all users who are registered as "seller"
-            const q = query(collection(db, "users"), where("role", "==", "seller"));
-            const querySnapshot = await getDocs(q);
+            const headers = await getHeaders();
+            const response = await fetch(`${API_BASE_URL}/api/v1/admin/subscriptions`, { headers });
             
-            const sellerData = [];
-            querySnapshot.forEach((document) => {
-                const data = document.data();
-                sellerData.push({
-                    id: document.id,
-                    email: data.email,
-                    brandName: data.brandName || "Unknown Brand",
-                    status: data.subscription_status || "trial",
-                    plan: data.subscription_plan || "free_tier", 
-                });
-            });
-            setSellers(sellerData);
+            if (response.ok) {
+                const data = await response.json();
+                setSellers(data);
+            }
         } catch (error) {
             console.error("Error fetching subscriptions:", error);
         } finally {
@@ -36,7 +33,6 @@ export default function SubscriptionsTab({ db }) {
         }
     };
 
-    // Master Admin Override: Instantly revoke Flagship access
     const handleRevokeSubscription = async (userId, brandName) => {
         const confirmRevoke = window.confirm(
             `Are you sure you want to revoke the subscription for ${brandName}? This will lock them out of their Flagship Storefront and hide their custom banner.`
@@ -44,16 +40,22 @@ export default function SubscriptionsTab({ db }) {
         
         if (confirmRevoke) {
             try {
-                // Update Firebase to remove their premium status
-                await updateDoc(doc(db, "users", userId), {
-                    subscription_status: 'cancelled',
-                    subscription_plan: 'none'
+                const headers = await getHeaders();
+                const res = await fetch(`${API_BASE_URL}/api/v1/admin/subscriptions/${userId}`, {
+                    method: 'PUT',
+                    headers,
+                    body: JSON.stringify({
+                        subscription_status: 'cancelled',
+                        subscription_plan: 'none'
+                    })
                 });
                 
+                if (!res.ok) throw new Error("Failed to revoke subscription");
+                
                 alert(`Success: ${brandName}'s subscription has been revoked.`);
-                fetchSubscriptions(); // Refresh the table automatically
+                fetchSubscriptions(); 
             } catch (error) {
-                alert("Failed to update subscription status in the database.");
+                alert("Failed to update subscription status securely.");
                 console.error(error);
             }
         }
@@ -68,7 +70,7 @@ export default function SubscriptionsTab({ db }) {
     }
 
     return (
-        <div className="content-section">
+        <div className="content-section active">
             <h2 className="section-title">Storefront Subscriptions</h2>
             <span className="section-subtitle">Manage seller billing plans and flagship storefront access.</span>
 
@@ -101,11 +103,11 @@ export default function SubscriptionsTab({ db }) {
                                         
                                         <td style={{ padding: '12px 16px' }}>
                                             <span style={{ 
-                                                background: seller.plan.includes('999') || seller.plan.includes('799') ? 'var(--warning-light)' : 'var(--bg-light)',
-                                                color: seller.plan.includes('999') || seller.plan.includes('799') ? 'var(--warning)' : 'var(--text-muted)',
+                                                background: (seller.plan || '').includes('999') || (seller.plan || '').includes('799') ? 'var(--warning-light)' : 'var(--bg-light)',
+                                                color: (seller.plan || '').includes('999') || (seller.plan || '').includes('799') ? 'var(--warning)' : 'var(--text-muted)',
                                                 padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em'
                                             }}>
-                                                {seller.plan.replace('_', ' ')}
+                                                {(seller.plan || 'free_tier').replace('_', ' ')}
                                             </span>
                                         </td>
 
@@ -117,7 +119,7 @@ export default function SubscriptionsTab({ db }) {
                                                 {seller.status === 'active' && <i className="fa-solid fa-circle-check" style={{ marginRight: '6px' }}></i>}
                                                 {seller.status === 'trial' && <i className="fa-solid fa-clock" style={{ marginRight: '6px' }}></i>}
                                                 {seller.status === 'cancelled' && <i className="fa-solid fa-circle-xmark" style={{ marginRight: '6px' }}></i>}
-                                                {seller.status}
+                                                {seller.status || 'trial'}
                                             </span>
                                         </td>
 

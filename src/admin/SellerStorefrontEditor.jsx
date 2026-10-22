@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { doc, getDoc, collection, getDocs, updateDoc, setDoc, query, where } from 'firebase/firestore';
+import { API_BASE_URL } from '../apiConfig';
 import './SellerStorefrontEditor.css';
 
 export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, onBackToAdmin, getAuthHeaders }) {
@@ -11,7 +10,7 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
     const [uploadingTarget, setUploadingTarget] = useState(null);
 
     const [brandName, setBrandName] = useState('');
-    const [vanityHandle, setVanityHandle] = useState(''); // 🔥 NEW: URL Handle State
+    const [vanityHandle, setVanityHandle] = useState(''); 
     const [brandLogo, setBrandLogo] = useState('');
     const [brandColor, setBrandColor] = useState('#000000');
     const [headerType, setHeaderType] = useState('text'); 
@@ -32,64 +31,59 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
         if (!targetEmail) return;
         
         const loadData = async () => {
-            const snap = await getDoc(doc(db, "seller_profiles", targetEmail));
-            if (snap.exists() && snap.data().storefront) {
-                const sf = snap.data().storefront;
-                setBrandName(sf.brandName || '');
-                setVanityHandle(sf.vanityHandle || ''); // 🔥 NEW: Load Handle
-                setBrandLogo(sf.brandLogo || '');
-                setBrandColor(sf.brandColor || '#000000');
-                setHeaderType(sf.headerType || 'text');
-                setHeaderBanner(sf.headerBanner || '');
-                setModules(sf.modules || []);
-                setCustomPages(sf.pages || []);
-            }
-
             try {
-                const catSnap = await getDocs(collection(db, "categories"));
-                const cats = [];
-                catSnap.forEach(d => cats.push({ id: d.id, ...d.data() }));
-                setStoreCategories(cats);
-            } catch (err) {
-                console.error("Failed to load categories", err);
-            }
-
-            setIsLoadingProducts(true);
-            try {
-                const q1 = query(collection(db, "products"), where("sellerEmail", "==", targetEmail));
-                const q2 = query(collection(db, "products"), where("email", "==", targetEmail)); 
-
-                const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
-                const loadedProductsMap = new Map();
-
-                const processDoc = (d) => {
-                    const p = d.data();
-                    let imgUrl = "https://via.placeholder.com/150";
-                    if (p.images && p.images.length > 0) imgUrl = p.images[0];
-                    else if (typeof p.image === 'string') imgUrl = p.image;
-                    else if (typeof p.imageUrl === 'string') imgUrl = p.imageUrl;
-
-                    loadedProductsMap.set(d.id, {
-                        id: d.id, 
-                        name: p.title || p.name || 'Untitled Product', 
-                        price: p.selling_price || p.price || 0, 
-                        image: imgUrl
-                    });
-                };
-
-                snap1.forEach(processDoc);
-                snap2.forEach(processDoc);
+                const headers = await getAuthHeaders();
                 
-                setMyProducts(Array.from(loadedProductsMap.values()));
+                // 1. SECURE FETCH: Profile Data
+                const profileRes = await fetch(`${API_BASE_URL}/api/v1/seller/profile`, { headers });
+                if (profileRes.ok) {
+                    const profileData = await profileRes.json();
+                    if (profileData.storefront) {
+                        const sf = profileData.storefront;
+                        setBrandName(sf.brandName || '');
+                        setVanityHandle(sf.vanityHandle || ''); 
+                        setBrandLogo(sf.brandLogo || '');
+                        setBrandColor(sf.brandColor || '#000000');
+                        setHeaderType(sf.headerType || 'text');
+                        setHeaderBanner(sf.headerBanner || '');
+                        setModules(sf.modules || []);
+                        setCustomPages(sf.pages || []);
+                    }
+                }
+
+                // 2. SECURE FETCH: Public Categories
+                const catRes = await fetch(`${API_BASE_URL}/api/v1/public/config/tribe_categories`);
+                if (catRes.ok) {
+                    const catData = await catRes.json();
+                    setStoreCategories(catData.tribes || []);
+                }
+
+                // 3. SECURE FETCH: Inventory
+                setIsLoadingProducts(true);
+                const prodRes = await fetch(`${API_BASE_URL}/api/v1/seller/products`, { headers });
+                if (prodRes.ok) {
+                    const prods = await prodRes.json();
+                    const mappedProds = prods.map(p => {
+                        let imgUrl = "https://via.placeholder.com/150";
+                        if (p.images && p.images.length > 0) imgUrl = p.images[0];
+                        else if (typeof p.image === 'string') imgUrl = p.image;
+                        return {
+                            id: p.id, 
+                            name: p.title || p.name || 'Untitled Product', 
+                            price: p.selling_price || p.price || 0, 
+                            image: imgUrl
+                        };
+                    });
+                    setMyProducts(mappedProds);
+                }
             } catch (err) {
-                console.error("Failed to load products securely", err);
-            } 
-            finally { 
-                setIsLoadingProducts(false); 
+                console.error("Failed to load storefront data securely", err);
+            } finally {
+                setIsLoadingProducts(false);
             }
         };
         loadData();
-    }, [targetEmail]);
+    }, [targetEmail, getAuthHeaders]);
 
     const genId = () => Math.random().toString(36).substr(2, 9);
 
@@ -101,10 +95,7 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
 
         setIsSaving(true);
         try {
-            const profileRef = doc(db, "seller_profiles", targetEmail);
-            const docSnap = await getDoc(profileRef);
-
-            // 🔥 NEW: Save the sanitized URL handle to the database
+            const headers = await getAuthHeaders();
             const payload = {
                 storefront: {
                     brandName: (brandName || '').trim().substring(0, 50), 
@@ -114,16 +105,17 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
                     headerType, 
                     headerBanner,
                     modules, 
-                    pages: customPages, 
-                    updatedAt: new Date().toISOString()
+                    pages: customPages
                 }
             };
 
-            if (docSnap.exists()) {
-                await updateDoc(profileRef, payload);
-            } else {
-                await setDoc(profileRef, payload);
-            }
+            const response = await fetch(`${API_BASE_URL}/api/v1/seller/profile`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error("Server rejected save operation");
 
             alert(`Storefront successfully published!`);
         } catch (error) {
@@ -284,7 +276,6 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
 
     return (
         <div className="content-section active wysiwyg-container">
-            
             {adminSellerEmail && (
                 <div style={{ background: '#fef3c7', padding: '12px 20px', borderRadius: '8px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #f59e0b', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -386,7 +377,6 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
                                 </div>
                             )}
 
-                            {/* 🔥 NEW: URL Handle Input Box */}
                             <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: '#f9fafb', padding: '8px 16px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
                                 <i className="fa-solid fa-link" style={{ color: '#9ca3af' }}></i>
                                 <span style={{ fontSize: '13px', color: '#6b7280' }}>/shop/</span>
@@ -446,7 +436,7 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
                                         <div className="module-category">
                                             <select className="invisible-input category-title-select" value={mod.heading} onChange={(e) => updateModule(mod.id, 'heading', e.target.value)}>
                                                 <option value="" disabled>Select Master Category...</option>
-                                                {storeCategories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
+                                                {storeCategories.map(cat => <option key={cat.name} value={cat.name}>{cat.name}</option>)}
                                             </select>
                                             <div className="category-items-flex">
                                                 {mod.items?.map((item) => (

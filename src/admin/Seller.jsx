@@ -1,9 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { initializeApp, getApp, getApps } from "firebase/app";
-import { getFirestore, collection, addDoc, getDocs, doc, getDoc, setDoc, updateDoc, query, where } from "firebase/firestore";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
-
 import { API_BASE_URL } from "../apiConfig.js"; 
 import './Seller.css'; 
 
@@ -16,27 +12,10 @@ import ReviewsTab from "./ReviewsTab";
 import MessagesTab from "./MessagesTab";
 import SellerFooter from "./SellerFooter";
 import SellerPromoTab from "./SellerPromoTab"; 
-
 import SellerSubscription from "./SellerSubscription";
 import SellerStorefrontEditor from "./SellerStorefrontEditor";
 
-const firebaseConfig = {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY, 
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID,
-    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
-};
-
-const appName = "jambawear-seller";
-const app = getApps().some((firebaseApp) => firebaseApp.name === appName)
-    ? getApp(appName)
-    : initializeApp(firebaseConfig, appName);
-const db = getFirestore(app);
-const storage = getStorage(app);
-const auth = getAuth(app);
+const auth = getAuth();
 const provider = new GoogleAuthProvider();
 
 const stateDistrictMap = {
@@ -57,9 +36,6 @@ export default function SellerDashboard() {
     const [sellerProfile, setSellerProfile] = useState({}); 
     const [isProfileEditing, setIsProfileEditing] = useState(false); 
     const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); 
-    
-    const [wallet, setWallet] = useState({ available: 0, pending: 0, withdrawn: 0 });
-    const [payoutHistory, setPayoutHistory] = useState([]);
 
     const [selectedState, setSelectedState] = useState("");
     const [selectedDistrict, setSelectedDistrict] = useState("");
@@ -114,46 +90,46 @@ export default function SellerDashboard() {
             if (user) {
                 setSellerEmail(user.email);
                 try {
-                    const docRef = doc(db, "authorized_sellers", user.email);
-                    const docSnap = await getDoc(docRef);
-                    if (!docSnap.exists()) {
+                    const headers = { 'Authorization': `Bearer ${await user.getIdToken()}` };
+                    
+                    // SECURE FETCH: Check authorization status
+                    const authRes = await fetch(`${API_BASE_URL}/api/v1/seller/onboarding`, { headers });
+                    const authData = await authRes.json();
+                    
+                    if (authData.status !== 'approved') {
                         window.location.replace('/sell-with-us');
                         return;
                     }
+                    
                     setAuthError("");
                     setShowLoginOverlay(false);
                     
-                    const profileRef = doc(db, "seller_profiles", user.email);
-                    const profileSnap = await getDoc(profileRef);
-                    let currentProfileData = {}; 
-
-                    if (profileSnap.exists()) {
-                        const data = profileSnap.data();
-                        currentProfileData = data; 
-                        setSellerProfile(data);
-                        setTempProfilePhoto(data.profilePhoto || ""); 
-                        setSameAsPermanent(data.sameAsPermanent || false);
-                        setSelectedState(data.state || "");
-                        setSelectedDistrict(data.district || "");
-                        setSelectedPickupState(data.pickupState || "");
-                        setSelectedPickupDistrict(data.pickupDistrict || "");
-                        setIsProfileEditing(false); 
-                    } else {
-                        setIsProfileEditing(true); 
+                    // SECURE FETCH: Load Store Profile
+                    const profileRes = await fetch(`${API_BASE_URL}/api/v1/seller/profile`, { headers });
+                    if (profileRes.ok) {
+                        const profileData = await profileRes.json();
+                        if (Object.keys(profileData).length > 0) {
+                            setSellerProfile(profileData);
+                            setTempProfilePhoto(profileData.profilePhoto || ""); 
+                            setSameAsPermanent(profileData.sameAsPermanent || false);
+                            setSelectedState(profileData.state || "");
+                            setSelectedDistrict(profileData.district || "");
+                            setSelectedPickupState(profileData.pickupState || "");
+                            setSelectedPickupDistrict(profileData.pickupDistrict || "");
+                            setIsProfileEditing(false); 
+                        } else {
+                            setIsProfileEditing(true); 
+                        }
                     }
 
-                    await loadSellerInventory(user.email); 
-                    await loadSellerOrders(user.email, currentProfileData); 
-                    await loadSellerReviews(user.email); 
-                    await loadSupportTickets(user.email); 
+                    await loadSellerInventory(); 
+                    await loadSellerOrders(); 
+                    await loadSellerReviews(); 
+                    await loadSupportTickets(); 
                     setIsCheckingAuth(false);
                 } catch (err) {
                     console.error("Verification failed", err);
-                    if (err && err.code === "permission-denied") {
-                        setAuthError("Verification was blocked by database permissions. Please contact support.");
-                    } else {
-                        setAuthError("Verification failed due to a network or server issue. Please try again in a moment.");
-                    }
+                    setAuthError("Verification failed due to a network or server issue. Please try again in a moment.");
                     setShowLoginOverlay(true);
                     setIsCheckingAuth(false);
                 }
@@ -165,26 +141,20 @@ export default function SellerDashboard() {
         return () => unsubscribe();
     }, []); 
 
-    const loadSellerInventory = async (email) => {
+    const loadSellerInventory = async () => {
         try {
-            const q = query(collection(db, "products"), where("sellerEmail", "==", email));
-            const querySnapshot = await getDocs(q);
-            let products = []; 
-            querySnapshot.forEach((doc) => { products.push({ id: doc.id, docId: doc.id, ...doc.data() }); });
-            setSellerProducts(products);
+            const headers = await getAuthHeaders();
+            const res = await fetch(`${API_BASE_URL}/api/v1/seller/products`, { headers });
+            if (res.ok) setSellerProducts(await res.json());
         } catch (err) { console.error("Inventory Load Error:", err); }
     };
 
-    const loadSellerOrders = async (email, profileData) => {
+    const loadSellerOrders = async () => {
         try {
             const headers = await getAuthHeaders();
-            const response = await fetch(`${API_BASE_URL}/api/v1/seller/orders`, {
-                method: 'GET',
-                headers: headers
-            });
+            const response = await fetch(`${API_BASE_URL}/api/v1/seller/orders`, { headers });
             if (!response.ok) throw new Error("Failed to fetch secure orders");
-            const ordersList = await response.json();
-            setSellerOrders(ordersList);
+            setSellerOrders(await response.json());
             setLoadingData(false);
         } catch (error) { 
             console.error("Error loading orders:", error); 
@@ -192,29 +162,27 @@ export default function SellerDashboard() {
         }
     };
 
-    const loadSellerReviews = async (email) => {
+    const loadSellerReviews = async () => {
         try {
-            const q = query(collection(db, "reviews"), where("sellerEmail", "==", email));
-            const querySnapshot = await getDocs(q);
-            let loadedReviews = [];
-            querySnapshot.forEach((doc) => { loadedReviews.push({ id: doc.id, ...doc.data() }); });
-            loadedReviews.sort((a, b) => {
-                const dateA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-                const dateB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-                return dateB - dateA;
-            });
-            setSellerReviews(loadedReviews);
+            const headers = await getAuthHeaders();
+            const res = await fetch(`${API_BASE_URL}/api/v1/seller/reviews`, { headers });
+            if (res.ok) {
+                const reviews = await res.json();
+                reviews.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                setSellerReviews(reviews);
+            }
         } catch (error) { console.error("Error fetching reviews:", error); }
     };
 
-    const loadSupportTickets = async (email) => {
+    const loadSupportTickets = async () => {
         try {
-            const q = query(collection(db, "support_tickets"), where("email", "==", email));
-            const querySnapshot = await getDocs(q);
-            let tickets = [];
-            querySnapshot.forEach((doc) => { tickets.push({ id: doc.id, ...doc.data() }); });
-            tickets.sort((a, b) => new Date(b.date) - new Date(a.date));
-            setSupportTickets(tickets);
+            const headers = await getAuthHeaders();
+            const res = await fetch(`${API_BASE_URL}/api/v1/seller/tickets`, { headers });
+            if (res.ok) {
+                const tickets = await res.json();
+                tickets.sort((a, b) => new Date(b.date) - new Date(a.date));
+                setSupportTickets(tickets);
+            }
         } catch (error) { console.error("Error loading tickets:", error); }
     };
 
@@ -222,20 +190,25 @@ export default function SellerDashboard() {
         e.preventDefault();
         if (!newTicketSubject.trim() || !ticketMessage.trim()) return;
         try {
-            const newTicket = {
+            const headers = await getAuthHeaders();
+            const payload = {
                 sellerName: sellerProfile.brandName || sellerEmail,
-                email: sellerEmail,
                 subject: newTicketSubject,
-                status: 'open',
-                date: new Date().toISOString(),
                 messages: [{ sender: 'seller', text: ticketMessage, time: new Date().toISOString() }]
             };
-            const docRef = await addDoc(collection(db, "support_tickets"), newTicket);
-            setSupportTickets([{ id: docRef.id, ...newTicket }, ...supportTickets]);
-            setIsCreatingTicket(false);
-            setNewTicketSubject("");
-            setTicketMessage("");
-            if(window.showToast) window.showToast("Support ticket created!");
+            
+            const res = await fetch(`${API_BASE_URL}/api/v1/seller/tickets`, {
+                method: 'POST', headers, body: JSON.stringify(payload)
+            });
+            
+            if (res.ok) {
+                const data = await res.json();
+                setSupportTickets([{ id: data.id, ...payload, status: 'open', date: new Date().toISOString() }, ...supportTickets]);
+                setIsCreatingTicket(false);
+                setNewTicketSubject("");
+                setTicketMessage("");
+                if(window.showToast) window.showToast("Support ticket created!");
+            }
         } catch (error) { alert("Error creating ticket: " + error.message); }
     };
 
@@ -243,25 +216,35 @@ export default function SellerDashboard() {
         e.preventDefault();
         if (!ticketMessage.trim()) return;
         try {
-            const updatedMessages = [...activeTicket.messages, { sender: 'seller', text: ticketMessage, time: new Date().toISOString() }];
-            const ticketRef = doc(db, "support_tickets", activeTicket.id);
-            await updateDoc(ticketRef, { messages: updatedMessages, status: 'open' });
-            const updatedTicket = { ...activeTicket, messages: updatedMessages, status: 'open' };
-            setActiveTicket(updatedTicket);
-            setSupportTickets(supportTickets.map(t => t.id === updatedTicket.id ? updatedTicket : t));
-            setTicketMessage("");
+            const headers = await getAuthHeaders();
+            const res = await fetch(`${API_BASE_URL}/api/v1/seller/tickets/${activeTicket.id}/reply`, {
+                method: 'POST', headers, body: JSON.stringify({ message: { sender: 'seller', text: ticketMessage, time: new Date().toISOString() } })
+            });
+            
+            if (res.ok) {
+                const updatedMessages = [...activeTicket.messages, { sender: 'seller', text: ticketMessage, time: new Date().toISOString() }];
+                const updatedTicket = { ...activeTicket, messages: updatedMessages, status: 'open' };
+                setActiveTicket(updatedTicket);
+                setSupportTickets(supportTickets.map(t => t.id === updatedTicket.id ? updatedTicket : t));
+                setTicketMessage("");
+            }
         } catch(error) { alert("Error replying to ticket: " + error.message); }
     };
 
     const handlePostReply = async (reviewId) => {
         if (!replyText.trim()) return;
         try {
-            const reviewRef = doc(db, "reviews", reviewId);
-            await updateDoc(reviewRef, { sellerReply: replyText, replyCreatedAt: new Date().toISOString() });
-            setSellerReviews(sellerReviews.map(rev => rev.id === reviewId ? { ...rev, sellerReply: replyText } : rev));
-            setReplyingTo(null);
-            setReplyText("");
-            if(window.showToast) window.showToast("Reply posted successfully!");
+            const headers = await getAuthHeaders();
+            const res = await fetch(`${API_BASE_URL}/api/v1/seller/reviews/${reviewId}/reply`, {
+                method: 'POST', headers, body: JSON.stringify({ replyText })
+            });
+            
+            if (res.ok) {
+                setSellerReviews(sellerReviews.map(rev => rev.id === reviewId ? { ...rev, sellerReply: replyText } : rev));
+                setReplyingTo(null);
+                setReplyText("");
+                if(window.showToast) window.showToast("Reply posted successfully!");
+            }
         } catch (error) { alert("Error posting reply: " + error.message); }
     };
 
@@ -270,12 +253,11 @@ export default function SellerDashboard() {
             try {
                 const headers = await getAuthHeaders();
                 const response = await fetch(`${API_BASE_URL}/api/v1/seller/orders/${orderId}/accept`, {
-                    method: 'POST',
-                    headers: headers
+                    method: 'POST', headers
                 });
                 if (!response.ok) throw new Error("Failed to accept order");
                 if(window.showToast) window.showToast("Order Accepted Successfully!");
-                loadSellerOrders(sellerEmail, sellerProfile); 
+                loadSellerOrders(); 
             } catch(e) { alert("Error accepting order: " + e.message); }
         }
     };
@@ -586,15 +568,12 @@ export default function SellerDashboard() {
                 seller_payout: parseFloat(document.getElementById('p-payout').value) || 0,
                 stock: parseInt(document.getElementById('p-stock').value) || 0, 
                 category: (document.getElementById('p-category').value || "") + " - " + (document.getElementById('p-gender').value || ""),
-                
                 ...sizingData,
-                
                 return_policy: document.getElementById('p-return-policy')?.value || "7_day_return_replace", 
                 package_weight: document.getElementById('p-weight')?.value || "Under 500g",
                 dispatch_time: document.getElementById('p-dispatch')?.value || "Ships in 2-3 Days",
                 care_instructions: careInstructions, 
                 search_tags: document.getElementById('p-tags')?.value || "",
-                
                 images: finalUrls, 
                 video_url: finalVideoUrl,
                 description: document.getElementById('p-desc').value || "",
@@ -617,18 +596,24 @@ export default function SellerDashboard() {
                 allow_cod: document.getElementById('p-pay-cod').checked,
                 allow_online: document.getElementById('p-pay-online').checked,
                 approval_status: "pending", 
-                isHidden: true,
-                updated_at: new Date().toISOString()
+                isHidden: true
             };
 
+            const headers = await getAuthHeaders();
+
             if (editingProductId) {
-                await updateDoc(doc(db, "products", editingProductId), productData);
-                if(window.showToast) window.showToast("Product Updated & Sent for Approval!");
+                const res = await fetch(`${API_BASE_URL}/api/v1/seller/products/${editingProductId}`, {
+                    method: 'PUT', headers, body: JSON.stringify(productData)
+                });
+                if (res.ok && window.showToast) window.showToast("Product Updated & Sent for Approval!");
+                else throw new Error("Update failed.");
             } else {
                 productData.item_id = "JW" + Date.now().toString().slice(-6);
-                productData.created_at = new Date().toISOString();
-                await addDoc(collection(db, "products"), productData);
-                if(window.showToast) window.showToast("Product Submitted for Admin Approval!");
+                const res = await fetch(`${API_BASE_URL}/api/v1/seller/products`, {
+                    method: 'POST', headers, body: JSON.stringify(productData)
+                });
+                if (res.ok && window.showToast) window.showToast("Product Submitted for Admin Approval!");
+                else throw new Error("Submission failed.");
             }
 
             document.getElementById('new-product-form').reset();
@@ -639,7 +624,7 @@ export default function SellerDashboard() {
             setCurrentEditVideoUrl("");
             setSelectedVideo(null);
             setActiveTab('live-products');
-            loadSellerInventory(sellerEmail);
+            loadSellerInventory();
             
         } catch (err) { 
             alert("Error submitting product: " + err.message); 
@@ -690,7 +675,6 @@ export default function SellerDashboard() {
         btn.innerText = 'Saving...';
 
         const profileData = {
-            email: sellerEmail,
             profilePhoto: tempProfilePhoto,
             brandName: document.getElementById('prof-brand-name').value,
             sellerName: document.getElementById('prof-seller-name').value,
@@ -711,17 +695,24 @@ export default function SellerDashboard() {
             bankName: document.getElementById('bank-name').value,
             accName: document.getElementById('bank-acc-name').value,
             accNumber: accNum,
-            ifsc: ifsc,
-            updated_at: new Date().toISOString()
+            ifsc: ifsc
         };
 
         try {
-            await setDoc(doc(db, "seller_profiles", sellerEmail), profileData);
-            setSellerProfile(profileData); 
-            setIsProfileEditing(false); 
-            if(window.showToast) window.showToast("Store Profile Saved!");
+            const headers = await getAuthHeaders();
+            const res = await fetch(`${API_BASE_URL}/api/v1/seller/profile`, {
+                method: 'PUT', headers, body: JSON.stringify(profileData)
+            });
+
+            if (res.ok) {
+                setSellerProfile(prev => ({ ...prev, ...profileData })); 
+                setIsProfileEditing(false); 
+                if(window.showToast) window.showToast("Store Profile Saved!");
+            } else {
+                throw new Error("Server rejected save operation");
+            }
         } catch (err) {
-            alert("Failed to save profile.");
+            alert("Failed to save profile: " + err.message);
         } finally {
             btn.disabled = false;
             btn.innerText = 'Save Profile Details';
@@ -807,6 +798,7 @@ export default function SellerDashboard() {
                 <LiveProductsTab isActive={activeTab === 'live-products'} sellerProducts={sellerProducts} loadingData={loadingData} setActiveTab={setActiveTab} editProduct={editProduct} />
                 
                 <AddProductTab 
+                    getAuthHeaders={getAuthHeaders}
                     isActive={activeTab === 'add-product'} 
                     handleProductSubmit={handleProductSubmit} 
                     editingProductId={editingProductId} 

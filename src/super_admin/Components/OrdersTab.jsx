@@ -2,19 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from "../../apiConfig.js"; 
 import "../styles/Orders.css";
 
-// IMPORT DATABASE AND SECURE INVOICE GENERATOR ENGINE
-import { db } from '../../firebase';
-import { generateOrderInvoice } from '../../utils/invoiceGenerator';
-
 export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refreshOrders }) {
-    // Local React State for this tab
     const [orderFilterStatus, setOrderFilterStatus] = useState('all');
     const [orderDateRange, setOrderDateRange] = useState('all');
     const [expandedOrders, setExpandedOrders] = useState({});
     const [searchQuery, setSearchQuery] = useState('');
     const [isDateMenuOpen, setIsDateMenuOpen] = useState(false);
 
-    // Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (!event.target.closest('.custom-filter-dropdown')) {
@@ -155,10 +149,8 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
         setExpandedOrders(prev => ({ ...prev, [orderId]: !prev[orderId] }));
     };
 
-    // --- Multi-Layer Filtration & Bulletproof Sorting Logic --- //
     const filteredOrders = (orders || [])
         .filter(order => {
-            // 1. Search Logic
             const searchLower = searchQuery.toLowerCase();
             const jambaId = (order.jamba_order_id || "").toLowerCase();
             const orderIdStr = (order.razorpay_order_id || order.id || "").toLowerCase();
@@ -169,7 +161,6 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
             }
             const matchesSearch = jambaId.includes(searchLower) || orderIdStr.includes(searchLower) || contactInfo.includes(searchLower) || addressString.includes(searchLower);
 
-            // 2. Status Logic
             let matchesStatus = true;
             const currentStatus = order.status ? order.status.toLowerCase() : 'pending';
             if (orderFilterStatus !== 'all') {
@@ -179,7 +170,6 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
                 else matchesStatus = (currentStatus === orderFilterStatus);
             }
 
-            // 3. Date Logic
             let matchesDate = true;
             if (orderDateRange !== "all") {
                 const getOrderTime = (dateVal) => {
@@ -191,24 +181,19 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
                 
                 const orderDate = new Date(getOrderTime(order.created_at || order.createdAt));
                 const today = new Date();
-                
                 const getStartOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
                 const startOfToday = getStartOfDay(today);
-                
                 const startOfYesterday = new Date(startOfToday);
                 startOfYesterday.setDate(startOfYesterday.getDate() - 1);
                 
-                if (orderDateRange === "today") {
-                    matchesDate = orderDate >= startOfToday;
-                } else if (orderDateRange === "yesterday") {
-                    matchesDate = orderDate >= startOfYesterday && orderDate < startOfToday;
-                } else if (orderDateRange === "this_week") {
+                if (orderDateRange === "today") matchesDate = orderDate >= startOfToday;
+                else if (orderDateRange === "yesterday") matchesDate = orderDate >= startOfYesterday && orderDate < startOfToday;
+                else if (orderDateRange === "this_week") {
                     const startOfWeek = new Date(startOfToday);
                     startOfWeek.setDate(startOfWeek.getDate() - today.getDay()); 
                     matchesDate = orderDate >= startOfWeek;
-                } else if (orderDateRange === "this_month") {
-                    matchesDate = orderDate.getMonth() === today.getMonth() && orderDate.getFullYear() === today.getFullYear();
-                } else if (orderDateRange === "last_month") {
+                } else if (orderDateRange === "this_month") matchesDate = orderDate.getMonth() === today.getMonth() && orderDate.getFullYear() === today.getFullYear();
+                else if (orderDateRange === "last_month") {
                     const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
                     const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
                     matchesDate = orderDate >= lastMonthStart && orderDate < thisMonthStart;
@@ -218,18 +203,13 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
             return matchesSearch && matchesStatus && matchesDate;
         })
         .sort((a, b) => {
-            // Forces the absolute newest order to the top, regardless of Firebase Date format
             const getTime = (dateVal) => {
                 if (!dateVal) return 0;
                 if (typeof dateVal.toDate === 'function') return dateVal.toDate().getTime();
                 if (dateVal.seconds) return dateVal.seconds * 1000;
                 return new Date(dateVal).getTime();
             };
-            
-            const timeA = getTime(a.created_at || a.createdAt);
-            const timeB = getTime(b.created_at || b.createdAt);
-            
-            return timeB - timeA; 
+            return getTime(b.created_at || b.createdAt) - getTime(a.created_at || a.createdAt); 
         });
 
     return (
@@ -434,22 +414,17 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
                                                 </div>
                                             </div>
 
-                                            {/* INVOICE VIEW / PRINT BUTTONS FOR ADMIN */}
+                                            {/* 🔥 ZERO-TRUST UPDATE: Link directly to secure Python PDF Engine */}
                                             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px', marginBottom: '16px' }}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => generateOrderInvoice(order, db, false)}
-                                                    style={{ flex: 1, minWidth: '160px', background: '#ffffff', color: '#111827', border: '1px solid #111827', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                                                <a
+                                                    href={`${API_BASE_URL}/api/orders/${order.id}/invoice`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="action-btn"
+                                                    style={{ flex: 1, minWidth: '160px', background: '#ffffff', color: '#111827', border: '1px solid #111827', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', textDecoration: 'none' }}
                                                 >
-                                                    <i className="fa-solid fa-eye"></i> View Invoice
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => generateOrderInvoice(order, db, true)}
-                                                    style={{ flex: 1, minWidth: '160px', background: '#8b7355', color: '#ffffff', border: '1px solid #8b7355', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                                                >
-                                                    <i className="fa-solid fa-download"></i> Download / Print
-                                                </button>
+                                                    <i className="fa-solid fa-file-invoice"></i> View / Download Invoice
+                                                </a>
                                             </div>
 
                                             {/* Admin Actions */}

@@ -1,11 +1,18 @@
 import React, { useState } from "react";
-import { collection, doc, updateDoc, addDoc } from "firebase/firestore";
+import { API_BASE_URL } from "../../apiConfig.js";
+import { auth } from '../../firebase'; 
 import "../styles/Messages.css";
 
-export default function MessagesTab({ db, supportTickets, setSupportTickets, globalSellers }) {
+export default function MessagesTab({ getAuthHeaders, supportTickets, setSupportTickets, globalSellers }) {
     const [messageTab, setMessageTab] = useState("inbox");
     const [activeTicket, setActiveTicket] = useState(null);
     const [replyText, setReplyText] = useState("");
+
+    const getHeaders = async () => {
+        if (getAuthHeaders) return await getAuthHeaders();
+        const token = await auth.currentUser.getIdToken();
+        return { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
+    };
 
     const handleSendBroadcast = async (e) => {
         e.preventDefault();
@@ -27,8 +34,18 @@ export default function MessagesTab({ db, supportTickets, setSupportTickets, glo
                 messages: [{ sender: 'admin', text: message, time: new Date().toISOString() }]
             };
             
-            const docRef = await addDoc(collection(db, "support_tickets"), newTicketData);
-            setSupportTickets([{ id: docRef.id, ...newTicketData }, ...supportTickets]);
+            const headers = await getHeaders();
+            const res = await fetch(`${API_BASE_URL}/api/v1/admin/tickets`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(newTicketData)
+            });
+            
+            if (!res.ok) throw new Error("Failed to send message via secure API.");
+            
+            const data = await res.json();
+            setSupportTickets([{ id: data.id, ...newTicketData }, ...supportTickets]);
+            
             if(window.showToast) window.showToast("Message Sent Successfully!");
             document.getElementById('broadcast-form').reset();
             setMessageTab('inbox');
@@ -46,10 +63,17 @@ export default function MessagesTab({ db, supportTickets, setSupportTickets, glo
 
         try {
             const updatedMessages = [...activeTicket.messages, { sender: 'admin', text: replyText, time: new Date().toISOString() }];
-            const ticketRef = doc(db, "support_tickets", activeTicket.id);
-            await updateDoc(ticketRef, { messages: updatedMessages, status: 'open' });
-            const updatedTicket = { ...activeTicket, messages: updatedMessages, status: 'open' };
             
+            const headers = await getHeaders();
+            const res = await fetch(`${API_BASE_URL}/api/v1/admin/tickets/${activeTicket.id}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify({ messages: updatedMessages, status: 'open' })
+            });
+
+            if (!res.ok) throw new Error("Failed to reply to ticket securely.");
+
+            const updatedTicket = { ...activeTicket, messages: updatedMessages, status: 'open' };
             setActiveTicket(updatedTicket);
             setSupportTickets(supportTickets.map(t => t.id === updatedTicket.id ? updatedTicket : t));
             setReplyText('');
@@ -62,8 +86,15 @@ export default function MessagesTab({ db, supportTickets, setSupportTickets, glo
 
     const markTicketResolved = async () => {
         try {
-            const ticketRef = doc(db, "support_tickets", activeTicket.id);
-            await updateDoc(ticketRef, { status: 'resolved' });
+            const headers = await getHeaders();
+            const res = await fetch(`${API_BASE_URL}/api/v1/admin/tickets/${activeTicket.id}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify({ status: 'resolved' })
+            });
+
+            if (!res.ok) throw new Error("Failed to resolve ticket securely.");
+
             const updatedTicket = { ...activeTicket, status: 'resolved' };
             setActiveTicket(updatedTicket);
             setSupportTickets(supportTickets.map(t => t.id === updatedTicket.id ? updatedTicket : t));

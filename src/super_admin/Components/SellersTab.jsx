@@ -2,14 +2,10 @@ import React, { useState, useEffect } from "react";
 import { API_BASE_URL } from "../../apiConfig.js"; 
 import "../styles/Sellers.css";
 
-import { collection, query, where, getDocs, doc, updateDoc, setDoc , serverTimestamp } from "firebase/firestore";
-import { getAuth } from 'firebase/auth';
-
 // ⚠️ ADJUST THIS RELATIVE PATH TO POINT TO YOUR EDITOR COMPONENT
 import SellerStorefrontEditor from '../../admin/SellerStorefrontEditor'; 
 
-// 🔥 FIX: Added 'db' back as a prop so it uses the Secure Admin Connection!
-export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liveProducts = [], orders = [], loadAuthorizedSellers }) {
+export default function SellersTab({ getAuthHeaders, globalSellers = [], liveProducts = [], orders = [], loadAuthorizedSellers }) {
     // --- State Management ---
     const [mainViewTab, setMainViewTab] = useState("directory"); 
 
@@ -40,23 +36,12 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
     const fetchApplications = async () => {
         setIsLoadingApplications(true);
         try {
-            if (!db) {
-                console.error("Firebase DB instance is missing or not imported correctly.");
-                setIsLoadingApplications(false);
-                return;
+            const headers = await getAuthHeaders();
+            const response = await fetch(`${API_BASE_URL}/api/v1/admin/seller_applications`, { headers });
+            if (response.ok) {
+                const data = await response.json();
+                setPendingApplications(data);
             }
-            
-            const querySnapshot = await getDocs(collection(db, "seller_applications"));
-            
-            const appsData = [];
-            querySnapshot.forEach((docSnap) => {
-                const data = docSnap.data();
-                if (data.status === 'kyc_submitted' || data.status === 'pending_kyc') {
-                    appsData.push({ id: docSnap.id, ...data });
-                }
-            });
-            
-            setPendingApplications(appsData);
         } catch (error) {
             console.error("Error fetching pending applications:", error);
         } finally {
@@ -74,18 +59,22 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
     const fetchStorefronts = async () => {
         setIsLoadingStorefronts(true);
         try {
-            const profilesSnap = await getDocs(collection(db, "seller_profiles"));
-            const stores = [];
-            profilesSnap.forEach(profileDoc => {
-                const data = profileDoc.data();
-                if (data.storefront) {
-                    stores.push({
-                        sellerEmail: profileDoc.id,
-                        ...data.storefront
-                    });
-                }
-            });
-            setStorefronts(stores);
+            const headers = await getAuthHeaders();
+            const response = await fetch(`${API_BASE_URL}/api/v1/admin/seller_profiles`, { headers });
+            
+            if (response.ok) {
+                const profiles = await response.json();
+                const stores = [];
+                profiles.forEach(profile => {
+                    if (profile.storefront) {
+                        stores.push({
+                            sellerEmail: profile.id,
+                            ...profile.storefront
+                        });
+                    }
+                });
+                setStorefronts(stores);
+            }
         } catch (error) {
             console.error("Error fetching storefronts:", error);
         } finally {
@@ -96,9 +85,11 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
     const toggleStoreSuspension = async (sellerEmail, currentStatus) => {
         if (!window.confirm(`Are you sure you want to ${currentStatus ? 'enable' : 'suspend'} this storefront?`)) return;
         try {
-            const profileRef = doc(db, "seller_profiles", sellerEmail);
-            await updateDoc(profileRef, {
-                "storefront.isSuspended": !currentStatus
+            const headers = await getAuthHeaders();
+            await fetch(`${API_BASE_URL}/api/v1/admin/seller_profiles/${sellerEmail}/suspend`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify({ isSuspended: !currentStatus })
             });
             setStorefronts(prev => prev.map(store => 
                 store.sellerEmail === sellerEmail ? { ...store, isSuspended: !currentStatus } : store
@@ -113,48 +104,20 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
         if (!window.confirm(`Are you sure you want to approve ${app.brandName}?`)) return;
         
         try {
-            // 1. Move the seller into the authorized_sellers collection (Database First)
-            await setDoc(doc(db, 'authorized_sellers', app.email), {
-                email: app.email,
-                brandName: app.brandName,
-                ownerName: app.ownerName,
-                phone: app.phone || '',
-                approvedAt: new Date().toISOString(),
-                kycData: app.kycData || null
+            const headers = await getAuthHeaders();
+            const response = await fetch(`${API_BASE_URL}/api/v1/admin/seller_applications/${app.id}/approve`, {
+                method: 'POST',
+                headers
             });
-            
-            // 2. Mark the application as approved
-            await updateDoc(doc(db, "seller_applications", app.id), {
-                status: "approved",
-                approvedAt: serverTimestamp(),
-                reviewedBy: getAuth().currentUser?.email || null,
-                rejectionReason: null,
-                rejectedAt: null
-            });
-            
-            // 3. Keep backend logic running in a non-blocking way
-            try {
-                const headers = typeof getAuthHeaders === 'function' ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
-                await fetch(`${API_BASE_URL}/admin/sellers`, {
-                    method: "POST",
-                    headers: headers,
-                    body: JSON.stringify({ email: app.email })
-                });
-            } catch (fetchError) {
-                console.warn("Backend Python API sync failed (Server might be off), but Firebase approval succeeded.", fetchError);
-            }
+
+            if (!response.ok) throw new Error("Approval failed on server");
 
             if (window.showToast) window.showToast(`${app.brandName} approved!`);
             fetchApplications();
             if (typeof loadAuthorizedSellers === 'function') loadAuthorizedSellers(); 
         } catch (error) {
             console.error("Error approving seller:", error);
-            if (error && error.code === "permission-denied") {
-                const signedInAs = getAuth().currentUser?.email || "an unknown account";
-                alert(`Approval Failed: the database blocked this action.\n\nYou are signed in as: ${signedInAs}\n\nSign out and sign back in with the admin account (jamba4334@gmail.com), and make sure the latest Firestore rules are published in the Firebase Console.`);
-            } else {
-                alert(`Approval Failed: ${error.message}`);
-            }
+            alert(`Approval Failed: ${error.message}`);
         }
     };
 
@@ -163,19 +126,23 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
             "Reason for rejection (the seller will see this).\nExamples: Invalid IFSC code, Blurry GST certificate, PAN does not match name",
             ""
         );
-        if (reason === null) return; // cancelled
+        if (reason === null) return; 
         const cleanReason = reason.trim().slice(0, 300);
         if (cleanReason.length < 3) {
             alert("Please enter a short reason so the seller knows what to fix.");
             return;
         }
+        
         try {
-            await updateDoc(doc(db, "seller_applications", appId), {
-                status: "rejected",
-                rejectionReason: cleanReason,
-                rejectedAt: serverTimestamp(),
-                reviewedBy: getAuth().currentUser?.email || null
+            const headers = await getAuthHeaders();
+            const response = await fetch(`${API_BASE_URL}/api/v1/admin/seller_applications/${appId}/reject`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ reason: cleanReason })
             });
+
+            if (!response.ok) throw new Error("Rejection failed on server");
+
             fetchApplications();
             if (window.showToast) window.showToast("Application rejected. Seller can re-apply after 24 hours.");
         } catch (error) {
@@ -192,7 +159,7 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
 
         setIsAuthorizing(true);
         try {
-            const headers = typeof getAuthHeaders === 'function' ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
+            const headers = await getAuthHeaders();
             await fetch(`${API_BASE_URL}/admin/sellers`, {
                 method: "POST",
                 headers: headers,
@@ -211,7 +178,7 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
     const handleRemoveSeller = async (email) => {
         if (window.confirm(`Are you absolutely sure you want to revoke access for ${email}?`)) {
             try {
-                const headers = typeof getAuthHeaders === 'function' ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
+                const headers = await getAuthHeaders();
                 await fetch(`${API_BASE_URL}/admin/sellers/${email}`, { method: "DELETE", headers: headers });
                 if (window.showToast) window.showToast(`Access revoked for ${email}`);
                 if (typeof loadAuthorizedSellers === 'function') loadAuthorizedSellers();
@@ -236,7 +203,7 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
         });
 
         try {
-            const headers = typeof getAuthHeaders === 'function' ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
+            const headers = await getAuthHeaders();
             
             let fetchedProfile = {};
             const profileRes = await fetch(`${API_BASE_URL}/admin/seller_profiles/${seller.email}`, { headers });
@@ -277,7 +244,7 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
         setIsSavingProfile(true);
 
         try {
-            const headers = typeof getAuthHeaders === 'function' ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
+            const headers = await getAuthHeaders();
             await fetch(`${API_BASE_URL}/admin/seller_profiles/${selectedSeller.email}`, {
                 method: "PUT",
                 headers: headers,
@@ -299,7 +266,7 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
         if (!utr) return;
 
         try {
-            const headers = typeof getAuthHeaders === 'function' ? await getAuthHeaders() : { 'Content-Type': 'application/json' };
+            const headers = await getAuthHeaders();
             await fetch(`${API_BASE_URL}/admin/payouts/${payoutId}`, {
                 method: "PUT",
                 headers: headers,
@@ -526,7 +493,6 @@ export default function SellersTab({ db, getAuthHeaders, globalSellers = [], liv
                     
                     {editingSellerEmail ? (
                         <SellerStorefrontEditor 
-                            db={db}
                             adminSellerEmail={editingSellerEmail} 
                             onBackToAdmin={() => setEditingSellerEmail(null)} 
                             getAuthHeaders={getAuthHeaders} 

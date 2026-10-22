@@ -1,16 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import {
-    collection,
-    query,
-    where,
-    orderBy,
-    onSnapshot,
-    getDocs,
-    doc,
-    setDoc,
-    updateDoc,
-    deleteDoc
-} from "firebase/firestore";
+import { API_BASE_URL } from "../../apiConfig";
 import "../styles/MasterControl.css";
 
 /* =========================================================
@@ -117,7 +106,7 @@ const notify = (message) => {
    MASTER CONTROL
    ========================================================= */
 
-export default function MasterControlTab({ db }) {
+export default function MasterControlTab({ getAuthHeaders }) {
     const [pillar, setPillar] = useState("active");
     const [subAdmins, setSubAdmins] = useState([]);
     const [isLoadingAdmins, setIsLoadingAdmins] = useState(true);
@@ -133,28 +122,40 @@ export default function MasterControlTab({ db }) {
     const [logSearch, setLogSearch] = useState("");
     const [logAction, setLogAction] = useState("all");
 
-    /* ---------- live roster ---------- */
+    /* ---------- live roster polling ---------- */
     useEffect(() => {
-        if (!db) return undefined;
-        const unsubscribe = onSnapshot(
-            query(collection(db, "admin_users")),
-            (snapshot) => {
-                const rows = [];
-                snapshot.forEach((snap) => rows.push({ id: snap.id, ...snap.data() }));
-                rows.sort((a, b) => {
-                    if (!!b.isOnline !== !!a.isOnline) return b.isOnline ? 1 : -1;
-                    return (a.email || "").localeCompare(b.email || "");
-                });
-                setSubAdmins(rows);
-                setIsLoadingAdmins(false);
-            },
-            (error) => {
+        let cancelled = false;
+        
+        const fetchAdmins = async () => {
+            try {
+                const headers = await getAuthHeaders();
+                const res = await fetch(`${API_BASE_URL}/api/v1/admin/users`, { headers });
+                if (res.ok) {
+                    const rows = await res.json();
+                    if (!cancelled) {
+                        rows.sort((a, b) => {
+                            if (!!b.isOnline !== !!a.isOnline) return b.isOnline ? 1 : -1;
+                            return (a.email || "").localeCompare(b.email || "");
+                        });
+                        setSubAdmins(rows);
+                        setIsLoadingAdmins(false);
+                    }
+                }
+            } catch (error) {
                 console.error("Master Control roster error:", error);
-                setIsLoadingAdmins(false);
+                if (!cancelled) setIsLoadingAdmins(false);
             }
-        );
-        return () => unsubscribe();
-    }, [db]);
+        };
+
+        fetchAdmins();
+        // Fallback to polling instead of onSnapshot
+        const interval = setInterval(fetchAdmins, 15000);
+        
+        return () => {
+            cancelled = true;
+            clearInterval(interval);
+        };
+    }, [getAuthHeaders]);
 
     /* ---------- ticking clock ---------- */
     useEffect(() => {
@@ -162,22 +163,24 @@ export default function MasterControlTab({ db }) {
         return () => clearInterval(timer);
     }, []);
 
-    /* ---------- audit logs ---------- */
+    /* ---------- audit logs polling ---------- */
     useEffect(() => {
-        if (!db || pillar !== "history") return;
+        if (pillar !== "history") return;
         let cancelled = false;
 
-        const load = async () => {
+        const loadLogs = async () => {
             setIsLoadingLogs(true);
             try {
-                const base = collection(db, "admin_audit_logs");
-                const q = logTarget === "all"
-                    ? query(base, orderBy("timestamp", "desc"))
-                    : query(base, where("email", "==", logTarget), orderBy("timestamp", "desc"));
-                const snapshot = await getDocs(q);
-                const rows = [];
-                snapshot.forEach((snap) => rows.push({ id: snap.id, ...snap.data() }));
-                if (!cancelled) setLogs(rows);
+                const headers = await getAuthHeaders();
+                const url = logTarget === "all" 
+                    ? `${API_BASE_URL}/api/v1/admin/logs` 
+                    : `${API_BASE_URL}/api/v1/admin/logs?email=${encodeURIComponent(logTarget)}`;
+                    
+                const res = await fetch(url, { headers });
+                if (res.ok) {
+                    const rows = await res.json();
+                    if (!cancelled) setLogs(rows);
+                }
             } catch (error) {
                 console.error("Master Control audit error:", error);
                 if (!cancelled) setLogs([]);
@@ -186,9 +189,9 @@ export default function MasterControlTab({ db }) {
             }
         };
 
-        load();
+        loadLogs();
         return () => { cancelled = true; };
-    }, [db, pillar, logTarget]);
+    }, [pillar, logTarget, getAuthHeaders]);
 
     /* ---------- derived ---------- */
     const onlineAdmins = useMemo(() => subAdmins.filter((a) => a.isOnline), [subAdmins]);
@@ -237,8 +240,17 @@ export default function MasterControlTab({ db }) {
 
     const patchAdmin = async (adminId, patch) => {
         try {
-            await updateDoc(doc(db, "admin_users", adminId), patch);
+            const headers = await getAuthHeaders();
+            const res = await fetch(`${API_BASE_URL}/api/v1/admin/users/${adminId}`, {
+                method: "PUT",
+                headers,
+                body: JSON.stringify(patch)
+            });
+            if (!res.ok) throw new Error("Update failed");
             flashSaved(adminId);
+            
+            // Optimistic UI update
+            setSubAdmins(prev => prev.map(a => a.id === adminId ? { ...a, ...patch } : a));
         } catch (error) {
             console.error("Master Control update failed:", error);
             alert("Could not save that change: " + error.message);
@@ -255,18 +267,14 @@ export default function MasterControlTab({ db }) {
 
         setIsAuthorizing(true);
         try {
-            await setDoc(doc(collection(db, "admin_users")), {
-                email,
-                firstName: "Pending",
-                lastName: "Registration...",
-                isAuthorized: true,
-                isOnline: false,
-                forceLogout: false,
-                accessStartTime: "00:00",
-                accessEndTime: "23:59",
-                maxDuration: 60,
-                createdAt: new Date().toISOString()
+            const headers = await getAuthHeaders();
+            const res = await fetch(`${API_BASE_URL}/api/v1/admin/users`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({ email })
             });
+            if (!res.ok) throw new Error("Failed to authorize");
+            
             setNewEmail("");
             notify("Email authorized. Their name fills in on first login.");
         } catch (error) {
@@ -297,8 +305,15 @@ export default function MasterControlTab({ db }) {
     const handleDelete = async (admin) => {
         if (!window.confirm(`Permanently delete ${admin.email} from the admin ledger? This cannot be undone.`)) return;
         try {
-            await deleteDoc(doc(db, "admin_users", admin.id));
+            const headers = await getAuthHeaders();
+            const res = await fetch(`${API_BASE_URL}/api/v1/admin/users/${admin.id}`, {
+                method: "DELETE",
+                headers
+            });
+            if (!res.ok) throw new Error("Failed to delete");
+            
             notify("Admin removed from the ledger.");
+            setSubAdmins(prev => prev.filter(a => a.id !== admin.id));
         } catch (error) {
             console.error("Master Control delete failed:", error);
             alert("Failed to delete this admin: " + error.message);

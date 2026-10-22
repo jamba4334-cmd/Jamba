@@ -2,12 +2,10 @@ import React, { useState, useEffect } from "react";
 import { API_BASE_URL } from "../../apiConfig.js";
 import "../styles/SiteSettings.css";
 
-import { collection, getDocs, doc, setDoc, deleteDoc, getDoc } from "firebase/firestore";
-
 const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
 const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
-export default function SiteSettings({ getAuthHeaders, storage, db }) {
+export default function SiteSettings({ getAuthHeaders }) {
     const [setupTab, setSetupTab] = useState("homepage"); 
 
     const [storeLogoUrl, setStoreLogoUrl] = useState("");
@@ -57,7 +55,7 @@ export default function SiteSettings({ getAuthHeaders, storage, db }) {
         fetchStoreProducts(); 
         fetchCategories(); 
         fetchLoginConfig(); 
-        fetchPublishedBrands(); // Initialize brand fetch
+        fetchPublishedBrands(); 
     }, []);
 
     const loadSiteSettings = async () => {
@@ -82,10 +80,10 @@ export default function SiteSettings({ getAuthHeaders, storage, db }) {
 
     const fetchLoginConfig = async () => {
         try {
-            const docRef = doc(db, "settings", "login_config");
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                const data = docSnap.data();
+            const headers = await getAuthHeaders();
+            const response = await fetch(`${API_BASE_URL}/admin/settings/login_config`, { headers });
+            if (response.ok) {
+                const data = await response.json();
                 if (data.mediaItems) setLoginMediaItems(data.mediaItems);
                 if (data.slideDuration) setLoginSlideDuration(data.slideDuration);
                 if (data.title) setLoginTitle(data.title);
@@ -99,10 +97,11 @@ export default function SiteSettings({ getAuthHeaders, storage, db }) {
     const fetchStoreProducts = async () => {
         setIsLoadingProducts(true);
         try {
-            const querySnapshot = await getDocs(collection(db, "products"));
-            const productsList = [];
-            querySnapshot.forEach((docSnap) => productsList.push({ id: docSnap.id, ...docSnap.data() }));
-            setAllProducts(productsList);
+            const headers = await getAuthHeaders();
+            const response = await fetch(`${API_BASE_URL}/admin/products?limit=200`, { headers });
+            if (response.ok) {
+                setAllProducts(await response.json());
+            }
         } catch (error) {
             console.error("Error fetching products:", error);
         } finally {
@@ -110,20 +109,16 @@ export default function SiteSettings({ getAuthHeaders, storage, db }) {
         }
     };
 
-    // 🔥 FETCH PUBLISHED SAAS BRANDS
     const fetchPublishedBrands = async () => {
         setIsLoadingBrands(true);
         try {
-            const snap = await getDocs(collection(db, "seller_profiles"));
-            const brandsList = [];
-            snap.forEach(docSnap => {
-                const data = docSnap.data();
-                // Only include sellers that have set up a vanity handle in their WYSIWYG Storefront Editor
-                if (data.storefront && data.storefront.vanityHandle) {
-                    brandsList.push({ id: docSnap.id, ...data });
-                }
-            });
-            setAllBrands(brandsList);
+            const headers = await getAuthHeaders();
+            const response = await fetch(`${API_BASE_URL}/api/v1/admin/seller_profiles`, { headers });
+            if (response.ok) {
+                const data = await response.json();
+                const brandsList = data.filter(brand => brand.storefront && brand.storefront.vanityHandle);
+                setAllBrands(brandsList);
+            }
         } catch (error) {
             console.error("Error fetching brands:", error);
         } finally {
@@ -133,10 +128,9 @@ export default function SiteSettings({ getAuthHeaders, storage, db }) {
 
     const fetchCategories = async () => {
         try {
-            const snap = await getDocs(collection(db, "categories"));
-            const cats = [];
-            snap.forEach(d => cats.push({ id: d.id, ...d.data() }));
-            setStoreCategories(cats);
+            const headers = await getAuthHeaders();
+            const response = await fetch(`${API_BASE_URL}/api/v1/admin/categories`, { headers });
+            if (response.ok) setStoreCategories(await response.json());
         } catch (error) {
             console.error("Error fetching categories:", error);
         }
@@ -146,9 +140,11 @@ export default function SiteSettings({ getAuthHeaders, storage, db }) {
         if (!newCategoryName.trim()) return;
         const slug = newCategoryName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
         try {
-            await setDoc(doc(db, "categories", slug), { 
-                name: newCategoryName.trim(), 
-                subcategories: [] 
+            const headers = await getAuthHeaders();
+            await fetch(`${API_BASE_URL}/api/v1/admin/categories`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ slug, name: newCategoryName.trim(), subcategories: [] })
             });
             setNewCategoryName("");
             fetchCategories();
@@ -159,8 +155,13 @@ export default function SiteSettings({ getAuthHeaders, storage, db }) {
 
     const handleDeleteMainCategory = async (slug) => {
         if (window.confirm("Delete this category? This might affect existing storefront routing.")) {
-            await deleteDoc(doc(db, "categories", slug));
-            fetchCategories();
+            try {
+                const headers = await getAuthHeaders();
+                await fetch(`${API_BASE_URL}/api/v1/admin/categories/${slug}`, { method: 'DELETE', headers });
+                fetchCategories();
+            } catch (error) {
+                alert("Failed to delete category");
+            }
         }
     };
 
@@ -168,14 +169,32 @@ export default function SiteSettings({ getAuthHeaders, storage, db }) {
         const trimmed = newSub.trim().toLowerCase();
         if (!trimmed || currentSubs.includes(trimmed)) return;
         const updatedSubs = [...currentSubs, trimmed];
-        await setDoc(doc(db, "categories", catSlug), { subcategories: updatedSubs }, { merge: true });
-        fetchCategories();
+        try {
+            const headers = await getAuthHeaders();
+            await fetch(`${API_BASE_URL}/api/v1/admin/categories/${catSlug}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify({ subcategories: updatedSubs })
+            });
+            fetchCategories();
+        } catch (error) {
+            alert("Failed to add subcategory");
+        }
     };
 
     const handleDeleteSubcategory = async (catSlug, currentSubs, subToRemove) => {
         const updatedSubs = currentSubs.filter(s => s !== subToRemove);
-        await setDoc(doc(db, "categories", catSlug), { subcategories: updatedSubs }, { merge: true });
-        fetchCategories();
+        try {
+            const headers = await getAuthHeaders();
+            await fetch(`${API_BASE_URL}/api/v1/admin/categories/${catSlug}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify({ subcategories: updatedSubs })
+            });
+            fetchCategories();
+        } catch (error) {
+            alert("Failed to delete subcategory");
+        }
     };
 
     const uploadToCloudinary = async (file) => {
@@ -217,13 +236,16 @@ export default function SiteSettings({ getAuthHeaders, storage, db }) {
                 body: JSON.stringify({ blocks: homeBlocks })
             });
 
-            await setDoc(doc(db, "settings", "login_config"), {
-                mediaItems: loginMediaItems,
-                slideDuration: Number(loginSlideDuration),
-                title: loginTitle,
-                subtitle: loginSubtitle,
-                lastUpdated: new Date()
-            }, { merge: true });
+            await fetch(`${API_BASE_URL}/admin/settings/login_config`, {
+                method: "PUT", headers,
+                body: JSON.stringify({
+                    mediaItems: loginMediaItems,
+                    slideDuration: Number(loginSlideDuration),
+                    title: loginTitle,
+                    subtitle: loginSubtitle,
+                    lastUpdated: new Date().toISOString()
+                })
+            });
 
             setActivePromoVideoUrl(finalVideoUrl);
             setPromoVideoFile(null);

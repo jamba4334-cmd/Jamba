@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from "react";
-import { collection, query, getDocs, deleteDoc, doc } from "firebase/firestore";
+import { API_BASE_URL } from "../../apiConfig.js";
+import { auth } from '../../firebase'; 
 import "../styles/Reviews.css";
 
-export default function ReviewsTab({ db, liveProducts }) {
+export default function ReviewsTab({ getAuthHeaders, liveProducts }) {
     const [allReviews, setAllReviews] = useState([]);
     const [reviewFilter, setReviewFilter] = useState('all');
     const [fullscreenImage, setFullscreenImage] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
+
+    const getHeaders = async () => {
+        if (getAuthHeaders) return await getAuthHeaders();
+        const token = await auth.currentUser.getIdToken();
+        return { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
+    };
 
     // --- Lifecycle: Load Reviews ---
     useEffect(() => {
@@ -16,22 +23,13 @@ export default function ReviewsTab({ db, liveProducts }) {
     const loadAdminReviews = async () => {
         setIsLoading(true);
         try {
-            const q = query(collection(db, "reviews"));
-            const querySnapshot = await getDocs(q);
-            let loadedReviews = [];
+            const headers = await getHeaders();
+            const res = await fetch(`${API_BASE_URL}/api/v1/admin/reviews`, { headers });
             
-            querySnapshot.forEach((docSnap) => {
-                loadedReviews.push({ id: docSnap.id, ...docSnap.data() });
-            });
-            
-            // Sort by newest first
-            loadedReviews.sort((a, b) => {
-                const dateA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-                const dateB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-                return dateB - dateA;
-            });
-            
-            setAllReviews(loadedReviews);
+            if (res.ok) {
+                const loadedReviews = await res.json();
+                setAllReviews(loadedReviews);
+            }
         } catch (error) {
             console.error("Error loading reviews:", error);
             if(window.showToast) window.showToast("Error loading reviews");
@@ -44,7 +42,12 @@ export default function ReviewsTab({ db, liveProducts }) {
     const handleDeleteReview = async (reviewId) => {
         if(window.confirm("Are you sure you want to delete this review? This cannot be undone.")) {
             try {
-                await deleteDoc(doc(db, "reviews", reviewId));
+                const headers = await getHeaders();
+                await fetch(`${API_BASE_URL}/api/v1/admin/reviews/${reviewId}`, {
+                    method: 'DELETE',
+                    headers
+                });
+                
                 if(window.showToast) window.showToast("Review deleted successfully.");
                 
                 // Remove from local state instantly without refetching
@@ -85,8 +88,8 @@ export default function ReviewsTab({ db, liveProducts }) {
                         const productImg = relatedProduct?.images?.[0] || 'https://via.placeholder.com/80';
                         const productTitle = relatedProduct?.title || 'Unknown Product';
                         
-                        // Handle Firestore Timestamps vs standard dates
-                        const displayDate = rev.createdAt?.toDate ? rev.createdAt.toDate().toLocaleDateString() : new Date(rev.createdAt).toLocaleDateString();
+                        // Handle formatting depending on data payload shape
+                        const displayDate = rev.createdAt ? new Date(rev.createdAt).toLocaleDateString() : 'Unknown Date';
 
                         return (
                             <div key={rev.id} className="review-admin-card">

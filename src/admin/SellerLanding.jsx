@@ -2,14 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './SellerLanding.css';
 
-import { db } from '../firebase'; 
-import { setDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
+import { API_BASE_URL } from '../apiConfig';
 
 export default function SellerLanding() {
     const navigate = useNavigate();
@@ -26,19 +20,9 @@ export default function SellerLanding() {
     const [loginError, setLoginError] = useState("");
 
     const [formData, setFormData] = useState({
-        ownerName: '',
-        brandName: '',
-        email: '',
-        phone: '',
-        whatsapp: '',
-        hasGst: 'yes',
-        gstNumber: '',
-        panNumber: '',
-        accountNumber: '',
-        ifscCode: '',
-        gstPdfUrl: '',
-        bankProofUrl: '',
-        maskedAadhaarUrl: ''
+        ownerName: '', brandName: '', email: '', phone: '', whatsapp: '',
+        hasGst: 'yes', gstNumber: '', panNumber: '', accountNumber: '', ifscCode: '',
+        gstPdfUrl: '', bankProofUrl: '', maskedAadhaarUrl: ''
     });
 
     const handleInputChange = (e) => {
@@ -60,19 +44,19 @@ export default function SellerLanding() {
         try {
             const result = await signInWithPopup(auth, provider);
             const userEmail = result.user.email.toLowerCase();
+            const token = await result.user.getIdToken();
 
-            const approvedRef = doc(db, "authorized_sellers", userEmail);
-            const approvedSnap = await getDoc(approvedRef);
-            if (approvedSnap.exists()) {
-                navigate('/seller'); 
-                return;
-            }
-
-            const appRef = doc(db, "seller_applications", userEmail);
-            const appSnap = await getDoc(appRef);
-            if (appSnap.exists()) {
-                const appData = appSnap.data();
-                if (appData.status === "kyc_submitted" || appData.status === "pending_kyc") {
+            // SECURE FETCH: Check seller status via Python Backend
+            const response = await fetch(`${API_BASE_URL}/api/v1/seller/onboarding`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.status === "approved") {
+                    navigate('/seller'); 
+                    return;
+                } else if (data.status === "kyc_submitted" || data.status === "pending_kyc") {
                     navigate('/seller/kyc'); 
                     return;
                 }
@@ -89,7 +73,8 @@ export default function SellerLanding() {
         }
     };
 
-    const handleSupabaseFileUpload = async (e, fieldName) => {
+    // 🔥 ZERO-TRUST UPDATE: Signed Upload via Python Proxy
+    const handleSecureFileUpload = async (e, fieldName) => {
         const file = e.target.files[0];
         if (!file) return;
         
@@ -97,33 +82,39 @@ export default function SellerLanding() {
             alert("Security Error: Verified email is missing.");
             return;
         }
-        if (!supabase) {
-            alert("Configuration Error: Supabase connection keys are missing in the .env file.");
-            return;
-        }
 
         setUploadingTarget(fieldName);
         try {
-            const fileExt = file.name.split('.').pop();
-            const safeEmail = formData.email.toLowerCase().replace(/[^a-z0-9]/g, '_');
-            const fileName = `${safeEmail}_${fieldName}_${Date.now()}.${fileExt}`;
-            const filePath = `${fileName}`;
+            const auth = getAuth();
+            if (!auth.currentUser) throw new Error("Your secure session expired. Please log in again.");
+            const token = await auth.currentUser.getIdToken();
 
-            const { data, error } = await supabase.storage
-                .from('kyc-documents')
-                .upload(filePath, file, { cacheControl: '3600', upsert: false });
+            // 1. Fetch Secure Signature from Python BFF
+            const sigRes = await fetch(`${API_BASE_URL}/api/v1/secure/upload-signature`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!sigRes.ok) throw new Error("Failed to authenticate upload request.");
+            const { signature, timestamp } = await sigRes.json();
 
-            if (error) throw error;
+            // 2. Push directly to Cloudinary using the signature (No insecure presets!)
+            const formDataToUpload = new FormData();
+            formDataToUpload.append("file", file);
+            formDataToUpload.append("timestamp", timestamp);
+            formDataToUpload.append("signature", signature);
+            formDataToUpload.append("api_key", import.meta.env.VITE_CLOUDINARY_API_KEY);
+            
+            const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+            const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
+                method: "POST",
+                body: formDataToUpload
+            });
 
-            const { data: publicUrlData } = supabase.storage
-                .from('kyc-documents')
-                .getPublicUrl(filePath);
+            const data = await uploadRes.json();
+            if (!data.secure_url) throw new Error(data.error?.message || "Cloudinary upload failed.");
 
-            if (publicUrlData?.publicUrl) {
-                setFormData(prev => ({ ...prev, [fieldName]: publicUrlData.publicUrl }));
-            }
+            setFormData(prev => ({ ...prev, [fieldName]: data.secure_url }));
         } catch (err) {
-            alert("Supabase Upload failed: " + (err.message || "Unknown error"));
+            alert("Secure Upload failed: " + (err.message || "Unknown error"));
         } finally {
             setUploadingTarget(null);
             e.target.value = '';
@@ -147,21 +138,17 @@ export default function SellerLanding() {
 
         try {
             const auth = getAuth();
-            if (!auth.currentUser) {
-                throw new Error("Your secure session expired. Please log in again.");
-            }
-
-            const targetEmail = formData.email.toLowerCase().trim();
+            if (!auth.currentUser) throw new Error("Your secure session expired. Please log in again.");
+            
+            const token = await auth.currentUser.getIdToken();
             const isGstRegistered = formData.hasGst === 'yes';
             
-            await setDoc(doc(db, "seller_applications", targetEmail), {
-                email: targetEmail,
+            const payload = {
                 ownerName: formData.ownerName,
                 brandName: formData.brandName,
                 phone: formData.phone,
                 whatsapp: formData.whatsapp,
                 role: "seller",
-                status: "kyc_submitted", 
                 kycData: {
                     hasGst: isGstRegistered,
                     gstNumber: isGstRegistered ? formData.gstNumber.toUpperCase() : 'UNREGISTERED',
@@ -172,9 +159,20 @@ export default function SellerLanding() {
                     bankProofUrl: formData.bankProofUrl,
                     maskedAadhaarUrl: formData.maskedAadhaarUrl
                 },
-                createdAt: serverTimestamp(),
                 submittedAt: new Date().toISOString()
+            };
+
+            // SECURE POST: Submit KYC details to Python Backend
+            const response = await fetch(`${API_BASE_URL}/api/v1/seller/onboarding`, {
+                method: 'POST',
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json' 
+                },
+                body: JSON.stringify(payload)
             });
+
+            if (!response.ok) throw new Error("Submission rejected by server.");
 
             setIsSubmitting(false);
             setRegistrationSuccess(true);
@@ -203,7 +201,7 @@ export default function SellerLanding() {
                                 <div className="seller-form-header">
                                     <span className="seller-eyebrow">Jamba Wear · Secured Onboarding</span>
                                     <h2 className="seller-form-title">{formStep === 1 ? 'Create Seller Account' : 'Legal & KYC Details'}</h2>
-                                    <p className="seller-form-subtitle">Step {formStep} of 2 — {formStep === 1 ? 'Basic store details' : 'Verify your identity & banking via Supabase'}</p>
+                                    <p className="seller-form-subtitle">Step {formStep} of 2 — {formStep === 1 ? 'Basic store details' : 'Verify your identity securely'}</p>
                                     <div className="seller-progress">
                                         <span className="seller-progress-bar is-active"></span>
                                         <span className={`seller-progress-bar ${formStep === 2 ? 'is-active' : ''}`}></span>
@@ -221,14 +219,7 @@ export default function SellerLanding() {
                                         <form onSubmit={handleNextStep}>
                                             <div className="form-group">
                                                 <label>Business Email Address (Verified via Google)</label>
-                                                <input 
-                                                    type="email" 
-                                                    name="email" 
-                                                    value={formData.email} 
-                                                    readOnly 
-                                                    required 
-                                                    style={{ background: '#f3f4f6', color: '#6b7280', cursor: 'not-allowed', border: '1px solid #d1d5db' }} 
-                                                />
+                                                <input type="email" name="email" value={formData.email} readOnly required style={{ background: '#f3f4f6', color: '#6b7280', cursor: 'not-allowed', border: '1px solid #d1d5db' }} />
                                             </div>
 
                                             <div className="form-grid-row">
@@ -255,7 +246,7 @@ export default function SellerLanding() {
 
                                             <div className="form-notice">
                                                 <i className="fa-solid fa-file-shield"></i>
-                                                <p><strong>Next Step:</strong> You will upload your GSTIN, Business PAN, Bank Details, and ID documents securely to Supabase storage on the next page.</p>
+                                                <p><strong>Next Step:</strong> You will upload your GSTIN, Business PAN, Bank Details, and ID documents securely via our encrypted portal on the next page.</p>
                                             </div>
 
                                             <button type="submit" className="seller-btn-primary seller-btn-block">
@@ -283,9 +274,9 @@ export default function SellerLanding() {
                                                         {formData.gstPdfUrl ? (
                                                             <div style={{ padding: '10px 14px', background: '#e6f4ea', color: '#137333', borderRadius: '8px', fontSize: '13px', border: '1px solid #ceead6' }}><i className="fa-solid fa-check"></i> Uploaded</div>
                                                         ) : (
-                                                            <input type="file" accept=".pdf,image/*" onChange={(e) => handleSupabaseFileUpload(e, 'gstPdfUrl')} required style={{ padding: '8px' }} />
+                                                            <input type="file" accept=".pdf,image/*" onChange={(e) => handleSecureFileUpload(e, 'gstPdfUrl')} required style={{ padding: '8px' }} />
                                                         )}
-                                                        {uploadingTarget === 'gstPdfUrl' && <span style={{ fontSize: '11px', color: 'var(--ws-brown)' }}>Uploading to Supabase...</span>}
+                                                        {uploadingTarget === 'gstPdfUrl' && <span style={{ fontSize: '11px', color: 'var(--ws-brown)' }}>Encrypting & Uploading...</span>}
                                                     </div>
                                                 </div>
                                             ) : (
@@ -317,18 +308,18 @@ export default function SellerLanding() {
                                                     {formData.bankProofUrl ? (
                                                         <div style={{ padding: '10px 14px', background: '#e6f4ea', color: '#137333', borderRadius: '8px', fontSize: '13px', border: '1px solid #ceead6' }}><i className="fa-solid fa-check"></i> Uploaded</div>
                                                     ) : (
-                                                        <input type="file" accept="image/*,.pdf" onChange={(e) => handleSupabaseFileUpload(e, 'bankProofUrl')} required style={{ padding: '8px' }} />
+                                                        <input type="file" accept="image/*,.pdf" onChange={(e) => handleSecureFileUpload(e, 'bankProofUrl')} required style={{ padding: '8px' }} />
                                                     )}
-                                                    {uploadingTarget === 'bankProofUrl' && <span style={{ fontSize: '11px', color: 'var(--ws-brown)' }}>Uploading to Supabase...</span>}
+                                                    {uploadingTarget === 'bankProofUrl' && <span style={{ fontSize: '11px', color: 'var(--ws-brown)' }}>Encrypting & Uploading...</span>}
                                                 </div>
                                                 <div className="form-group">
                                                     <label>ID Document (Masked)</label>
                                                     {formData.maskedAadhaarUrl ? (
                                                         <div style={{ padding: '10px 14px', background: '#e6f4ea', color: '#137333', borderRadius: '8px', fontSize: '13px', border: '1px solid #ceead6' }}><i className="fa-solid fa-check"></i> Uploaded</div>
                                                     ) : (
-                                                        <input type="file" accept="image/*,.pdf" onChange={(e) => handleSupabaseFileUpload(e, 'maskedAadhaarUrl')} required style={{ padding: '8px' }} />
+                                                        <input type="file" accept="image/*,.pdf" onChange={(e) => handleSecureFileUpload(e, 'maskedAadhaarUrl')} required style={{ padding: '8px' }} />
                                                     )}
-                                                    {uploadingTarget === 'maskedAadhaarUrl' && <span style={{ fontSize: '11px', color: 'var(--ws-brown)' }}>Uploading to Supabase...</span>}
+                                                    {uploadingTarget === 'maskedAadhaarUrl' && <span style={{ fontSize: '11px', color: 'var(--ws-brown)' }}>Encrypting & Uploading...</span>}
                                                 </div>
                                             </div>
 
@@ -337,7 +328,7 @@ export default function SellerLanding() {
                                             </button>
 
                                             <p className="seller-form-legal">
-                                                <i className="fa-solid fa-lock"></i> All documents are stored securely via Supabase and used solely for platform payout routing and compliance.
+                                                <i className="fa-solid fa-lock"></i> All documents are stored securely via encrypted storage and used solely for platform payout routing and compliance.
                                             </p>
                                         </form>
                                     )}
@@ -384,21 +375,7 @@ export default function SellerLanding() {
                     </div>
 
                     <div style={{ marginTop: '20px' }}>
-                        <button 
-                            onClick={() => navigate('/super-admin')} 
-                            style={{ 
-                                background: 'transparent', 
-                                border: 'none', 
-                                color: 'var(--ws-brown)', 
-                                fontSize: '13px', 
-                                cursor: 'pointer', 
-                                textDecoration: 'underline',
-                                fontWeight: '500',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px'
-                            }}
-                        >
+                        <button onClick={() => navigate('/super-admin')} style={{ background: 'transparent', border: 'none', color: 'var(--ws-brown)', fontSize: '13px', cursor: 'pointer', textDecoration: 'underline', fontWeight: '500', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                             <i className="fa-solid fa-lock"></i> System Admin Login
                         </button>
                     </div>
@@ -410,20 +387,11 @@ export default function SellerLanding() {
                     )}
 
                     <div className="seller-trust-strip">
-                        <div className="trust-item">
-                            <strong>2,400+</strong>
-                            <span>Artisan sellers</span>
-                        </div>
+                        <div className="trust-item"><strong>2,400+</strong><span>Artisan sellers</span></div>
                         <div className="trust-divider" />
-                        <div className="trust-item">
-                            <strong>28 States</strong>
-                            <span>Nationwide delivery</span>
-                        </div>
+                        <div className="trust-item"><strong>28 States</strong><span>Nationwide delivery</span></div>
                         <div className="trust-divider" />
-                        <div className="trust-item">
-                            <strong>Weekly</strong>
-                            <span>Automated payouts</span>
-                        </div>
+                        <div className="trust-item"><strong>Weekly</strong><span>Automated payouts</span></div>
                     </div>
                 </div>
             </section>
