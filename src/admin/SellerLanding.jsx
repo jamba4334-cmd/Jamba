@@ -4,6 +4,7 @@ import './SellerLanding.css';
 
 import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { API_BASE_URL } from '../apiConfig';
+import { secureUpload } from '../utils/secureUpload';
 
 export default function SellerLanding() {
     const navigate = useNavigate();
@@ -85,32 +86,7 @@ export default function SellerLanding() {
 
         setUploadingTarget(fieldName);
         try {
-            const auth = getAuth();
-            if (!auth.currentUser) throw new Error("Your secure session expired. Please log in again.");
-            const token = await auth.currentUser.getIdToken();
-
-            // 1. Fetch Secure Signature from Python BFF
-            const sigRes = await fetch(`${API_BASE_URL}/api/v1/secure/upload-signature`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!sigRes.ok) throw new Error("Failed to authenticate upload request.");
-            const { signature, timestamp } = await sigRes.json();
-
-            // 2. Push directly to Cloudinary using the signature (No insecure presets!)
-            const formDataToUpload = new FormData();
-            formDataToUpload.append("file", file);
-            formDataToUpload.append("timestamp", timestamp);
-            formDataToUpload.append("signature", signature);
-            formDataToUpload.append("api_key", import.meta.env.VITE_CLOUDINARY_API_KEY);
-            
-            const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-            const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
-                method: "POST",
-                body: formDataToUpload
-            });
-
-            const data = await uploadRes.json();
-            if (!data.secure_url) throw new Error(data.error?.message || "Cloudinary upload failed.");
+            const data = { secure_url: (await secureUpload(file, "kyc")).url };
 
             setFormData(prev => ({ ...prev, [fieldName]: data.secure_url }));
         } catch (err) {

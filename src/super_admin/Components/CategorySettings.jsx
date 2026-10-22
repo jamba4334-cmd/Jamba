@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { API_BASE_URL } from "../../apiConfig.js"; 
+import { secureUpload } from "../../utils/secureUpload";
 import "../styles/CategorySettings.css";
 
 export default function CategorySettings({ getAuthHeaders }) {
@@ -155,14 +156,9 @@ export default function CategorySettings({ getAuthHeaders }) {
         if(!file) return;
 
         setIsUploading(true);
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("upload_preset", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
-        const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/auto/upload`;
-
         try {
-            const res = await fetch(cloudinaryUrl, { method: "POST", body: formData });
-            const data = await res.json();
+            const up = await secureUpload(file, "site");
+            const data = { secure_url: up.url, resource_type: up.isVideo ? "video" : "image" };
             
             if (data.secure_url) {
                 setPageData(prev => ({

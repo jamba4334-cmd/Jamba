@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../apiConfig';
+import { secureUpload } from '../utils/secureUpload';
 import './SellerStorefrontEditor.css';
 
 export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, onBackToAdmin, getAuthHeaders }) {
@@ -130,14 +131,9 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
         const file = e.target.files[0];
         if (!file) return;
         try {
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("upload_preset", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
-            const resourceType = file.type.startsWith("video/") ? "video" : "image";
-            const res = await fetch(`https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`, { method: "POST", body: formData });
-            const data = await res.json();
-            if (data.secure_url) callback(data.secure_url, resourceType === 'video');
-        } catch (err) { alert("Upload failed. Check credentials."); } 
+            const { url, isVideo } = await secureUpload(file, "storefront");
+            callback(url, isVideo);
+        } catch (err) { alert("Upload failed: " + err.message); } 
         finally { setUploadingTarget(null); e.target.value = ''; }
     };
 
@@ -411,7 +407,7 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
                                                     <span className="tooltip-text">Recommended Size: 1200x600px</span>
                                                 </div>
                                             </span>
-                                            <div>Scroll Time: <input type="number" value={mod.scrollTime || 10} onChange={(e) => updateModule(mod.id, 'scrollTime', e.target.value)} style={{width:'50px'}} /> sec</div>
+                                            <div>Scroll Time: <input type="number" min="3" max="60" step="1" value={mod.scrollTime || 10} onChange={(e) => updateModule(mod.id, 'scrollTime', e.target.value)} onBlur={(e) => { const n = Number(e.target.value); updateModule(mod.id, 'scrollTime', Math.min(Math.max(Number.isFinite(n) && n > 0 ? Math.round(n) : 10, 3), 60)); }} style={{width:'50px'}} /> sec</div>
                                         </div>
                                         <div className="banner-preview-area">
                                             {mod.slides?.map((slide, sIdx) => (
@@ -508,7 +504,7 @@ export default function SellerStorefrontEditor({ adminSellerEmail, sellerEmail, 
                                                     <span className="tooltip-text">Recommended Size: 1200x300px</span>
                                                 </div>
                                             </span>
-                                            <div>Scroll Time: <input type="number" value={mod.scrollTime || 5} onChange={(e) => updateModule(mod.id, 'scrollTime', e.target.value)} style={{width:'50px'}} /> sec</div>
+                                            <div>Scroll Time: <input type="number" min="3" max="60" step="1" value={mod.scrollTime || 5} onChange={(e) => updateModule(mod.id, 'scrollTime', e.target.value)} onBlur={(e) => { const n = Number(e.target.value); updateModule(mod.id, 'scrollTime', Math.min(Math.max(Number.isFinite(n) && n > 0 ? Math.round(n) : 5, 3), 60)); }} style={{width:'50px'}} /> sec</div>
                                         </div>
                                         <div className="banner-preview-area">
                                             {mod.slides?.map((slide, sIdx) => (

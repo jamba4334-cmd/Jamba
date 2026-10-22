@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { API_BASE_URL } from "../../apiConfig.js";
+import { secureUpload } from "../../utils/secureUpload";
 import "../styles/AddProduct.css";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../../firebase.js";
@@ -11,11 +12,24 @@ export default function AddProductTab({ getAuthHeaders, refreshInventory, onComp
     // --- Dynamic Categories State ---
     const [storeCategories, setStoreCategories] = useState([]);
     
-    // --- Pricing & Earnings State ---
-    const [platformFee, setPlatformFee] = useState(0);
-    const [gstIncluded, setGstIncluded] = useState(0);
-    const [gstRate, setGstRate] = useState(5);
-    const [finalPrice, setFinalPrice] = useState(0);
+    // --- Pricing & Earnings State (Aligned with Seller Side) ---
+    const [hasGst, setHasGst] = useState(false); 
+    const [taxConfig, setTaxConfig] = useState({
+        commissionBrackets: [
+            { maxLimit: 1499, rate: 25.0 },
+            { maxLimit: 3999, rate: 18.0 },
+            { maxLimit: 999999, rate: 10.0 }
+        ],
+        tcsRate: 1.0,
+        gstBrackets: [
+            { maxLimit: 2500, rate: 5.0 },
+            { maxLimit: 999999, rate: 18.0 }
+        ]
+    });
+    
+    const [pricingPreview, setPricingPreview] = useState({
+        payout: 0, platformFee: 0, appliedCommRate: 25, commissionGst: 0, tcs: 0, productGst: 0, appliedGstRate: 18
+    });
 
     // --- Core Form Data ---
     const [formData, setFormData] = useState({
@@ -39,41 +53,69 @@ export default function AddProductTab({ getAuthHeaders, refreshInventory, onComp
     const [existingVideo, setExistingVideo] = useState("");
     const [newVideo, setNewVideo] = useState(null);
 
-    // --- Fetch Master Categories from DB ---
+    // --- Fetch Master Categories & Tax Config from DB ---
     useEffect(() => {
-        const fetchCategories = async () => {
+        const fetchInitialData = async () => {
             try {
+                // Fetch Categories
                 const snap = await getDocs(collection(db, "categories"));
                 const cats = [];
                 snap.forEach(d => cats.push({ id: d.id, ...d.data() }));
                 setStoreCategories(cats);
+
+                // Fetch Financial Settings
+                const taxRes = await fetch(`${API_BASE_URL}/api/v1/public/settings/financial`);
+                if (taxRes.ok) {
+                    const data = await taxRes.json();
+                    if (data && Object.keys(data).length > 0) {
+                        setTaxConfig(prev => ({
+                            commissionBrackets: data.commissionBrackets?.length ? data.commissionBrackets.sort((a,b) => a.maxLimit - b.maxLimit) : prev.commissionBrackets,
+                            tcsRate: data.tcsRate ?? prev.tcsRate,
+                            gstBrackets: data.gstBrackets?.length ? data.gstBrackets.sort((a,b) => a.maxLimit - b.maxLimit) : prev.gstBrackets
+                        }));
+                    }
+                }
             } catch (error) {
-                console.error("Error fetching categories:", error);
+                console.error("Error fetching initial data:", error);
             }
         };
-        fetchCategories();
+        fetchInitialData();
     }, []);
 
-    // --- Dynamic Pricing Calculator ---
+    // --- Downward Dynamic Pricing Calculator (Zero-Trust Ledger Math) ---
     useEffect(() => {
-        const val = parseFloat(formData.seller_payout);
-        if (!isNaN(val) && val > 0) {
-            const total = val / 0.70;
-            const fee = total - val; 
-            const rate = total > 2500 ? 18 : 5;
-            const basePrice = total / (1 + (rate / 100));
-            const tax = total - basePrice;
+        const sp = parseFloat(formData.selling_price);
+        if (!isNaN(sp) && sp > 0) {
+            
+            // Find Dynamic Commission Slab
+            let commRate = 30.0;
+            for (const bracket of taxConfig.commissionBrackets) {
+                if (sp <= bracket.maxLimit) { commRate = bracket.rate; break; }
+            }
 
-            setPlatformFee(fee);
-            setGstIncluded(tax);
-            setGstRate(rate);
-            setFinalPrice(total);
-            setFormData(prev => ({ ...prev, selling_price: total.toFixed(2) }));
+            // Find GST Slab
+            let gstRate = 18.0;
+            for (const bracket of taxConfig.gstBrackets) {
+                if (sp <= bracket.maxLimit) { gstRate = bracket.rate; break; }
+            }
+
+            const jambaFee = sp * (commRate / 100);
+            const commGst = jambaFee * 0.18;
+            const netProductValue = sp / (1 + (gstRate / 100));
+            const tcs = hasGst ? (netProductValue * (taxConfig.tcsRate / 100)) : 0.0;
+            const payout = sp - jambaFee - commGst - tcs;
+
+            setPricingPreview({
+                payout, platformFee: jambaFee, appliedCommRate: commRate, commissionGst: commGst, tcs, productGst: sp - netProductValue, appliedGstRate: gstRate
+            });
+            
+            // Auto-update the underlying payout field so it submits correctly
+            setFormData(prev => ({ ...prev, seller_payout: payout.toFixed(2) }));
         } else {
-            setPlatformFee(0); setGstIncluded(0); setGstRate(5); setFinalPrice(0);
-            setFormData(prev => ({ ...prev, selling_price: 0 }));
+            setPricingPreview({ payout: 0, platformFee: 0, appliedCommRate: 0, commissionGst: 0, tcs: 0, productGst: 0, appliedGstRate: 18 });
+            setFormData(prev => ({ ...prev, seller_payout: 0 }));
         }
-    }, [formData.seller_payout]);
+    }, [formData.selling_price, taxConfig, hasGst]);
 
     // --- Lifecycle: Populate Edit Data ---
     useEffect(() => {
@@ -161,6 +203,18 @@ export default function AddProductTab({ getAuthHeaders, refreshInventory, onComp
     const selectedMainCategory = storeCategories.find(c => c.name === formData.department);
     const dynamicSubcategories = selectedMainCategory ? (selectedMainCategory.subcategories || []) : [];
 
+    // ==========================================
+    // 🔒 ZERO-TRUST: SECURE SIGNATURE UPLOAD
+    // ==========================================
+    const uploadFileWithProgress = async (file, resourceType, totalFiles, completedFilesRef) => {
+        const { url } = await secureUpload(file, "product", {
+            onProgress: (fraction) => setUploadProgress(Math.round(((completedFilesRef.current + fraction) / totalFiles) * 70) + 10),
+        });
+        completedFilesRef.current += 1;
+        setUploadProgress(Math.round((completedFilesRef.current / totalFiles) * 70) + 10);
+        return url;
+    };
+
     // --- Submission Logic ---
     const handleProductSubmit = async (e) => {
         e.preventDefault();
@@ -181,32 +235,26 @@ export default function AddProductTab({ getAuthHeaders, refreshInventory, onComp
             let finalUrls = [];
             let finalVideoUrl = existingVideo;
             
-            // Cloudinary Image Upload
+            const validFilesToUpload = newFiles.filter(f => f !== null);
+            const totalFilesToUpload = validFilesToUpload.length + (newVideo ? 1 : 0);
+            let completedFilesRef = { current: 0 };
+            
+            // Secure Cloudinary Image Upload
             for (let i = 0; i < 5; i++) {
                 if (newFiles[i]) {
-                    const cFormData = new FormData();
-                    cFormData.append("file", newFiles[i]);
-                    cFormData.append("upload_preset", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET); 
-                    const res = await fetch(`https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`, { method: "POST", body: cFormData });
-                    const data = await res.json();
-                    if (data.secure_url) finalUrls.push(data.secure_url);
+                    const url = await uploadFileWithProgress(newFiles[i], "image", totalFilesToUpload, completedFilesRef);
+                    finalUrls.push(url);
                 } else if (existingImages[i]) {
                     finalUrls.push(existingImages[i]);
                 }
             }
 
-            // Cloudinary Video Upload
+            // Secure Cloudinary Video Upload
             if (newVideo) {
-                setUploadProgress(50);
-                const vFormData = new FormData();
-                vFormData.append("file", newVideo);
-                vFormData.append("upload_preset", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
-                const res = await fetch(`https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/video/upload`, { method: "POST", body: vFormData });
-                const data = await res.json();
-                if (data.secure_url) finalVideoUrl = data.secure_url;
+                finalVideoUrl = await uploadFileWithProgress(newVideo, "video", totalFilesToUpload, completedFilesRef);
             }
 
-            setUploadProgress(80);
+            setUploadProgress(85);
 
             // Sizing Logic Builder
             let sizingData = { sizing_type: sizingType };
@@ -308,41 +356,78 @@ export default function AddProductTab({ getAuthHeaders, refreshInventory, onComp
             <span className="section-title" style={{ marginBottom: '24px' }}>
                 {editingProduct ? 'Edit Product Details (Admin)' : 'Submit New Product (Admin)'}
             </span>
-            <p className="text-helper" style={{ marginBottom: '20px' }}>Admin module full-access override. Use caution when editing seller financial details.</p>
+            <p className="text-helper" style={{ marginBottom: '20px' }}>Admin module full-access override. Set customer price to auto-calculate payouts.</p>
             
             <form className="card" onSubmit={handleProductSubmit}>
                 
-                {/* PRICING SECTION */}
+                {/* PRICING SECTION (SELLER LOGIC PORTED TO ADMIN) */}
                 <span className="section-subtitle">Pricing & Earnings</span>
                 <div className="field-grid" style={{ marginBottom: '10px' }}>
                     <div className="form-group">
-                        <span className="label" style={{ color: 'var(--success)' }}>Seller Guaranteed Payout (₹)</span>
-                        <input type="number" name="seller_payout" className="input-box" placeholder="e.g. 1000" value={formData.seller_payout} onChange={handleChange} required min="10" style={{ borderColor: 'var(--success)', fontWeight: 'bold' }} disabled={isSubmitting} />
+                        <span className="label" style={{ color: 'var(--primary)' }}>Customer Selling Price (₹)</span>
+                        <input 
+                            type="number" 
+                            name="selling_price" 
+                            className="input-box" 
+                            placeholder="e.g. 1499" 
+                            value={formData.selling_price} 
+                            onChange={handleChange} 
+                            required 
+                            min="50" 
+                            style={{ borderColor: 'var(--primary)', fontWeight: 'bold' }} 
+                            disabled={isSubmitting} 
+                        />
                     </div>
                     <div className="form-group">
                         <span className="label">Original MRP (Optional Strikethrough)</span>
-                        <input type="number" name="original_price" className="input-box" placeholder="e.g. 2500" value={formData.original_price} onChange={handleChange} min="0" disabled={isSubmitting} />
+                        <input 
+                            type="number" 
+                            name="original_price" 
+                            className="input-box" 
+                            placeholder="e.g. 2500" 
+                            value={formData.original_price} 
+                            onChange={handleChange} 
+                            min="0" 
+                            disabled={isSubmitting} 
+                        />
                     </div>
                 </div>
 
-                {formData.seller_payout && !isNaN(formData.seller_payout) && parseFloat(formData.seller_payout) > 0 && (
+                {formData.selling_price && !isNaN(formData.selling_price) && parseFloat(formData.selling_price) > 0 && (
                     <div className="pricing-breakdown-box" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', marginBottom: '30px' }}>
-                        <h4 style={{ margin: '0 0 12px 0', color: '#0f172a', fontSize: '14px' }}><i className="fa-solid fa-calculator"></i> Retail Price Breakdown</h4>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#475569', marginBottom: '8px' }}>
-                            <span>Seller Guaranteed Earnings (70%):</span>
-                            <strong>₹{parseFloat(formData.seller_payout).toFixed(2)}</strong>
+                        <h4 style={{ margin: '0 0 12px 0', color: '#0f172a', fontSize: '14px' }}><i className="fa-solid fa-calculator"></i> Earnings Preview (Zero-Trust Ledger)</h4>
+                        
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#0f172a', marginBottom: '8px', fontWeight: '600' }}>
+                            <span>Customer Pays:</span>
+                            <span>₹{parseFloat(formData.selling_price).toFixed(2)}</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#475569', marginBottom: '2px' }}>
-                            <span>Platform Fee (30%):</span>
-                            <span>+ ₹{platformFee.toFixed(2)}</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#ef4444', marginBottom: '2px' }}>
+                            <span>Jamba Platform Fee ({pricingPreview.appliedCommRate}%):</span>
+                            <span>- ₹{pricingPreview.platformFee.toFixed(2)}</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px dashed #cbd5e1' }}>
-                            <span>↳ Includes Govt GST ({gstRate}%):</span>
-                            <span>(₹{gstIncluded.toFixed(2)})</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#ef4444', marginBottom: '2px' }}>
+                            <span>18% GST on Platform Fee:</span>
+                            <span>- ₹{pricingPreview.commissionGst.toFixed(2)}</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', color: '#0f172a', fontWeight: '700', marginTop: '12px' }}>
-                            <span>Final Price Customer Pays:</span>
-                            <span style={{ color: 'var(--primary)' }}>₹{finalPrice.toFixed(2)}</span>
+                        
+                        {hasGst ? (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#ef4444', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px dashed #cbd5e1' }}>
+                                <span>Govt Section 52 TCS ({taxConfig.tcsRate}%):</span>
+                                <span>- ₹{pricingPreview.tcs.toFixed(2)}</span>
+                            </div>
+                        ) : (
+                            <div style={{ paddingBottom: '8px', borderBottom: '1px dashed #cbd5e1' }}></div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', color: '#16a34a', fontWeight: '700', marginTop: '12px' }}>
+                            <span>Target Seller Net Payout:</span>
+                            <span>₹{pricingPreview.payout.toFixed(2)}</span>
+                        </div>
+                        <div style={{ marginTop: '12px', fontSize: '11px', color: '#64748b' }}>
+                            <i className="fa-solid fa-circle-info"></i> {hasGst ? 
+                                `Dynamic Item GST (${pricingPreview.appliedGstRate}%) is already embedded inside the selling price. Jamba Wear collects and remits the ₹${pricingPreview.productGst.toFixed(2)} output tax to the government.` :
+                                `Assuming unregistered artisan under GST limits, Section 52 TCS is completely waived for this account.`
+                            }
                         </div>
                     </div>
                 )}
@@ -372,22 +457,31 @@ export default function AddProductTab({ getAuthHeaders, refreshInventory, onComp
                     </div>
                 </div>
 
-                {/* 🔥 NEW: ADMIN OVERRIDES SECTION */}
+                {/* 🔥 ADMIN OVERRIDES SECTION */}
+                <span className="section-subtitle">Admin Placement & Overrides</span>
                 <div className="field-grid" style={{ background: '#fdf4ff', padding: '16px', borderRadius: '8px', border: '1px solid #f5d0fe', marginBottom: '20px' }}>
                     <div className="form-group">
-                        <span className="label" style={{ color: '#86198f', fontWeight: 'bold' }}>Placement Visibility (Admin)</span>
+                        <span className="label" style={{ color: '#86198f', fontWeight: 'bold' }}>Placement Visibility</span>
                         <select name="placement" value={formData.placement} onChange={handleChange} className="input-box" required disabled={isSubmitting} style={{ borderColor: '#e879f9' }}>
                             <option value="regular">Regular Collection Only</option>
                             <option value="hero">Homepage Hero (Display on Front Page)</option>
                         </select>
                     </div>
                     <div className="form-group">
-                        <span className="label" style={{ color: '#86198f', fontWeight: 'bold' }}>Approval Status (Admin)</span>
+                        <span className="label" style={{ color: '#86198f', fontWeight: 'bold' }}>Approval Status</span>
                         <select name="approval_status" value={formData.approval_status} onChange={handleChange} className="input-box" required disabled={isSubmitting} style={{ borderColor: '#e879f9' }}>
                             <option value="approved">Approved (Live on Store)</option>
                             <option value="pending">Pending Review (Hidden)</option>
                             <option value="rejected">Rejected (Returned to Seller)</option>
                         </select>
+                    </div>
+                    
+                    {/* GST Simulate Toggle for Accurate Admin Math */}
+                    <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', color: '#86198f' }}>
+                            <input type="checkbox" checked={hasGst} onChange={(e) => setHasGst(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#c026d3', cursor: 'pointer' }} disabled={isSubmitting}/> 
+                            Seller is GST Registered (Simulates TCS Deduction above)
+                        </label>
                     </div>
                 </div>
 

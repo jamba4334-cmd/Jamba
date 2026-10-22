@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { db } from '../firebase';
 import { API_BASE_URL } from '../apiConfig'; // 🔥 NEW: Import API URL
@@ -81,7 +81,17 @@ export default function BrandStorefront() {
         if (vanityHandle) fetchStorefront();
     }, [vanityHandle]);
 
-    const activeModules = !pageId && storefront ? (storefront.modules || []) : [];
+    const modulesSource = storefront?.modules;
+    const activeModules = useMemo(
+        () => (!pageId && Array.isArray(modulesSource) ? modulesSource : []),
+        [pageId, modulesSource]
+    );
+    // Only restart carousel timers when banner settings actually change
+    const bannerTimerKey = useMemo(() => JSON.stringify(
+        activeModules
+            .filter(m => (m.type === 'main_banner' || m.type === 'small_banner') && m.slides?.length > 1)
+            .map(m => [m.id, m.type, m.scrollTime])
+    ), [activeModules]);
     const customPage = pageId && storefront ? storefront.pages?.find(p => p.id === pageId) : null;
 
     useEffect(() => {
@@ -89,7 +99,9 @@ export default function BrandStorefront() {
         const intervals = [];
         activeModules.forEach(mod => {
             if ((mod.type === 'main_banner' || mod.type === 'small_banner') && mod.slides?.length > 1) {
-                const scrollTimeMs = (mod.scrollTime || (mod.type === 'main_banner' ? 10 : 5)) * 1000;
+                const fallback = mod.type === 'main_banner' ? 10 : 5;
+                const secs = Number(mod.scrollTime);
+                const scrollTimeMs = Math.min(Math.max(Number.isFinite(secs) && secs > 0 ? secs : fallback, 3), 60) * 1000;
                 
                 const id = setInterval(() => {
                     const slider = document.getElementById(`banner-track-${mod.id}`);
@@ -106,7 +118,8 @@ export default function BrandStorefront() {
             }
         });
         return () => intervals.forEach(id => clearInterval(id));
-    }, [activeModules]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [bannerTimerKey]);
 
     if (isLoading) return <div className="storefront-loading"><i className="fa-solid fa-spinner fa-spin"></i> Loading...</div>;
     if (error || !storefront) return <div className="storefront-error"><h2>{error || "Store Not Found"}</h2><Link to="/" className="storefront-back-btn">Return to Marketplace</Link></div>;

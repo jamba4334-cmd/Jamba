@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from "../../apiConfig.js"; 
+import { secureUpload } from "../../utils/secureUpload";
 import "../styles/Orders.css";
 
 export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refreshOrders }) {
@@ -111,19 +112,7 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
         }
 
         try {
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("upload_preset", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
-
-            const res = await fetch(`https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/auto/upload`, {
-                method: "POST", 
-                body: formData 
-            });
-            const data = await res.json();
-
-            if (!data.secure_url) {
-                throw new Error(data.error?.message || "Cloudinary upload failed.");
-            }
+            const data = { secure_url: (await secureUpload(file, "label")).url };
 
             const headers = await getAuthHeaders();
             await fetch(`${API_BASE_URL}/admin/orders/${orderId}`, {
@@ -142,6 +131,39 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
                 uploadBtn.disabled = false;
             }
             if (fileInput) fileInput.value = ""; 
+        }
+    };
+
+    // ==========================================
+    // 🔥 ZERO-TRUST INVOICE DOWNLOADER
+    // ==========================================
+    const handleViewInvoice = async (orderId) => {
+        const btn = document.getElementById(`invoice-btn-${orderId}`);
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
+        btn.disabled = true;
+
+        try {
+            const headers = await getAuthHeaders();
+            const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}/invoice`, {
+                method: "GET",
+                headers: headers
+            });
+
+            if (!response.ok) throw new Error("Unauthorized or Invoice not found.");
+
+            // Convert the secure binary response into a PDF blob and open it
+            const blob = await response.blob();
+            const fileUrl = window.URL.createObjectURL(blob);
+            window.open(fileUrl, '_blank');
+            
+        } catch (error) {
+            alert("Failed to load secure invoice: " + error.message);
+        } finally {
+            if (btn) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
         }
     };
 
@@ -416,15 +438,15 @@ export default function OrdersTab({ orders, liveProducts, getAuthHeaders, refres
 
                                             {/* 🔥 ZERO-TRUST UPDATE: Link directly to secure Python PDF Engine */}
                                             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px', marginBottom: '16px' }}>
-                                                <a
-                                                    href={`${API_BASE_URL}/api/orders/${order.id}/invoice`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
+                                                <button
+                                                    type="button"
+                                                    id={`invoice-btn-${order.id}`}
+                                                    onClick={() => handleViewInvoice(order.id)}
                                                     className="action-btn"
-                                                    style={{ flex: 1, minWidth: '160px', background: '#ffffff', color: '#111827', border: '1px solid #111827', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', textDecoration: 'none' }}
+                                                    style={{ flex: 1, minWidth: '160px', background: '#ffffff', color: '#111827', border: '1px solid #111827', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                                                 >
                                                     <i className="fa-solid fa-file-invoice"></i> View / Download Invoice
-                                                </a>
+                                                </button>
                                             </div>
 
                                             {/* Admin Actions */}

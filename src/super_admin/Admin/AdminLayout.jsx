@@ -99,6 +99,7 @@ export default function AdminLayout() {
         
         // Zero-Trust: Poll backend every 15 seconds to check for forced logouts from Master Admin
         heartbeatRef.current = setInterval(async () => {
+            if (document.hidden) return;
             try {
                 const headers = await getAuthHeaders();
                 const res = await fetch(`${API_BASE_URL}/api/v1/admin/session/status`, { headers });
@@ -194,8 +195,17 @@ export default function AdminLayout() {
     useEffect(() => {
         if (!isAuthenticated) return;
         loadAdminOrders();
-        const orderSyncInterval = setInterval(() => loadAdminOrders(), 15000); 
-        return () => clearInterval(orderSyncInterval);
+        // Poll every 60s, skip while tab is hidden, never overlap requests
+        let inFlight = false;
+        const sync = async () => {
+            if (inFlight || document.hidden) return;
+            inFlight = true;
+            try { await loadAdminOrders(); } finally { inFlight = false; }
+        };
+        const orderSyncInterval = setInterval(sync, 60000);
+        const onVisible = () => { if (!document.hidden) sync(); };
+        document.addEventListener("visibilitychange", onVisible);
+        return () => { clearInterval(orderSyncInterval); document.removeEventListener("visibilitychange", onVisible); };
     }, [isAuthenticated]);
 
     const loadAdminInventory = async () => {

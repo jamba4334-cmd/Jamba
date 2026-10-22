@@ -149,7 +149,7 @@ export default function MasterControlTab({ getAuthHeaders }) {
 
         fetchAdmins();
         // Fallback to polling instead of onSnapshot
-        const interval = setInterval(fetchAdmins, 15000);
+        const interval = setInterval(() => { if (!document.hidden) fetchAdmins(); }, 30000);
         
         return () => {
             cancelled = true;
@@ -159,8 +159,18 @@ export default function MasterControlTab({ getAuthHeaders }) {
 
     /* ---------- ticking clock ---------- */
     useEffect(() => {
-        const timer = setInterval(() => setNow(new Date()), 1000);
-        return () => clearInterval(timer);
+        // Tick once per minute (aligned to the minute) instead of every second,
+        // and pause while the tab is hidden, to avoid constant full re-renders.
+        let timer;
+        const schedule = () => {
+            clearTimeout(timer);
+            if (document.hidden) return;
+            setNow(new Date());
+            timer = setTimeout(schedule, 60000 - (Date.now() % 60000) + 50);
+        };
+        schedule();
+        document.addEventListener("visibilitychange", schedule);
+        return () => { clearTimeout(timer); document.removeEventListener("visibilitychange", schedule); };
     }, []);
 
     /* ---------- audit logs polling ---------- */
@@ -346,7 +356,7 @@ export default function MasterControlTab({ getAuthHeaders }) {
                     </div>
                     <div className="mc-clock">
                         <div className="mc-clock-time">
-                            {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                            {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                         </div>
                         <div className="mc-clock-date">
                             {now.toLocaleDateString([], { weekday: "short", day: "2-digit", month: "short" })}

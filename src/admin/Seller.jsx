@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
 import { API_BASE_URL } from "../apiConfig.js"; 
+import { secureUpload } from "../utils/secureUpload";
 import './Seller.css'; 
 
 import OrdersTab from "./OrdersTab";
@@ -92,7 +93,6 @@ export default function SellerDashboard() {
                 try {
                     const headers = { 'Authorization': `Bearer ${await user.getIdToken()}` };
                     
-                    // SECURE FETCH: Check authorization status
                     const authRes = await fetch(`${API_BASE_URL}/api/v1/seller/onboarding`, { headers });
                     const authData = await authRes.json();
                     
@@ -104,7 +104,6 @@ export default function SellerDashboard() {
                     setAuthError("");
                     setShowLoginOverlay(false);
                     
-                    // SECURE FETCH: Load Store Profile
                     const profileRes = await fetch(`${API_BASE_URL}/api/v1/seller/profile`, { headers });
                     if (profileRes.ok) {
                         const profileData = await profileRes.json();
@@ -453,36 +452,16 @@ export default function SellerDashboard() {
         setActiveTab('live-products');
     };
 
-    const uploadFileWithProgress = (file, resourceType, totalFiles, completedFilesRef) => {
-        return new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open("POST", `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`);
-            
-            xhr.upload.onprogress = (e) => {
-                if (e.lengthComputable) {
-                    const fileFraction = e.loaded / e.total;
-                    const overallPercentage = Math.round(((completedFilesRef.current + fileFraction) / totalFiles) * 100);
-                    setUploadProgress(overallPercentage);
-                }
-            };
-            
-            xhr.onload = () => {
-                if (xhr.status === 200) {
-                    completedFilesRef.current += 1;
-                    setUploadProgress(Math.round((completedFilesRef.current / totalFiles) * 100));
-                    resolve(JSON.parse(xhr.responseText).secure_url);
-                } else {
-                    reject(new Error(`${resourceType} upload failed.`));
-                }
-            };
-            
-            xhr.onerror = () => reject(new Error("Network Error"));
-            
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("upload_preset", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
-            xhr.send(formData);
+    // ==========================================
+    // 🔒 ZERO-TRUST: SECURE SIGNATURE UPLOAD
+    // ==========================================
+    const uploadFileWithProgress = async (file, resourceType, totalFiles, completedFilesRef) => {
+        const { url } = await secureUpload(file, "product", {
+            onProgress: (fraction) => setUploadProgress(Math.round(((completedFilesRef.current + fraction) / totalFiles) * 100)),
         });
+        completedFilesRef.current += 1;
+        setUploadProgress(Math.round((completedFilesRef.current / totalFiles) * 100));
+        return url;
     };
 
     const handleProductSubmit = async (e) => {
@@ -634,17 +613,18 @@ export default function SellerDashboard() {
         }
     };
 
+    // ==========================================
+    // 🔒 ZERO-TRUST: SECURE SIGNATURE PHOTO UPLOAD
+    // ==========================================
     const handleProfilePhotoUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const btnText = document.getElementById('profile-photo-btn-text');
         if(btnText) btnText.innerText = "Uploading...";
+        
         try {
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("upload_preset", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
-            const res = await fetch(`https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`, { method: "POST", body: formData });
-            const data = await res.json();
+            const data = { secure_url: (await secureUpload(file, "profile")).url };
+            
             if (data.secure_url) {
                 setTempProfilePhoto(data.secure_url);
                 setSellerProfile(prev => ({...prev, profilePhoto: data.secure_url}));

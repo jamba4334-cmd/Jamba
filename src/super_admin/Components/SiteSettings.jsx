@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { API_BASE_URL } from "../../apiConfig.js";
+import { secureUpload } from "../../utils/secureUpload";
 import "../styles/SiteSettings.css";
 
-const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
 export default function SiteSettings({ getAuthHeaders }) {
     const [setupTab, setSetupTab] = useState("homepage"); 
@@ -197,15 +196,7 @@ export default function SiteSettings({ getAuthHeaders }) {
         }
     };
 
-    const uploadToCloudinary = async (file) => {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-        const resourceType = file.type.startsWith("video/") ? "video" : "auto";
-        const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`, { method: "POST", body: formData });
-        const data = await response.json();
-        return { url: data.secure_url, isVideo: data.resource_type === "video" };
-    };
+    const uploadToCloudinary = (file) => secureUpload(file, "site");
 
     const handleSaveAll = async () => {
         setIsSaving(true);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './OrdersTab.css';
 import { API_BASE_URL } from '../apiConfig.js';
+import { getAuth } from 'firebase/auth'; // 🔥 ZERO-TRUST FIX: Import Firebase Auth
 
 export default function OrdersTab({ isActive, sellerOrders, loadingData, acceptOrder }) {
     const [expandedOrders, setExpandedOrders] = useState({});
@@ -17,6 +18,46 @@ export default function OrdersTab({ isActive, sellerOrders, loadingData, acceptO
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    // ==========================================
+    // 🔥 ZERO-TRUST INVOICE DOWNLOADER
+    // ==========================================
+    const handleViewInvoice = async (orderId) => {
+        const btn = document.getElementById(`invoice-btn-${orderId}`);
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
+        btn.disabled = true;
+
+        try {
+            const auth = getAuth();
+            const currentUser = auth.currentUser;
+            if (!currentUser) throw new Error("You must be logged in to view invoices.");
+
+            const token = await currentUser.getIdToken();
+            
+            const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}/invoice`, {
+                method: "GET",
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) throw new Error("Unauthorized or Invoice not found.");
+
+            // Convert the secure binary response into a PDF blob and open it
+            const blob = await response.blob();
+            const fileUrl = window.URL.createObjectURL(blob);
+            window.open(fileUrl, '_blank');
+            
+        } catch (error) {
+            alert("Failed to load secure invoice: " + error.message);
+        } finally {
+            if (btn) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+    };
 
     const toggleOrderDetails = (orderId) => {
         setExpandedOrders(prev => ({
@@ -209,16 +250,16 @@ export default function OrdersTab({ isActive, sellerOrders, loadingData, acceptO
                                             <div className="moc-pb-row moc-pb-final"><span>Gross Earning Base</span><span>₹{finalSellerTotal.toLocaleString('en-IN')}</span></div>
                                         </div>
                                         
-                                        {/* INVOICE VIEW / PRINT BUTTONS FOR SELLER VIA API */}
+                                        {/* 🔥 ZERO-TRUST UPDATE: Link directly to secure Python PDF Engine */}
                                         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px', marginBottom: '4px' }}>
-                                            <a
-                                                href={`${API_BASE_URL}/api/orders/${order.id}/invoice`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                style={{ flex: 1, minWidth: '160px', background: '#ffffff', color: '#111827', border: '1px solid #111827', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', textDecoration: 'none' }}
+                                            <button
+                                                type="button"
+                                                id={`invoice-btn-${order.id}`}
+                                                onClick={() => handleViewInvoice(order.id)}
+                                                style={{ flex: 1, minWidth: '160px', background: '#ffffff', color: '#111827', border: '1px solid #111827', padding: '10px 16px', borderRadius: '6px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                                             >
                                                 <i className="fa-solid fa-file-invoice"></i> View / Download Invoice
-                                            </a>
+                                            </button>
                                         </div>
                                     </div>
                                 )}
