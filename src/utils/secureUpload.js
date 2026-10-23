@@ -1,7 +1,8 @@
 import { getAuth } from "firebase/auth";
 import { API_BASE_URL } from "../apiConfig";
 
-const MAX_IMAGE_MB = 10;
+// 🔥 Increased limit to 50 MB
+const MAX_IMAGE_MB = 50; 
 const MAX_VIDEO_MB = 100;
 
 /**
@@ -37,12 +38,11 @@ export async function secureUpload(file, purpose, { onProgress } = {}) {
     form.append("file", file);
     form.append("api_key", api_key);
     form.append("timestamp", timestamp);
-    form.append("folder", folder || "jamba_uploads"); // Fallback folder
+    form.append("folder", folder || "jamba_uploads"); 
     form.append("signature", signature);
 
     const resourceType = isVideo ? "video" : isPdf ? "raw" : "image";
     
-    // 🔥 THE FIX: Fallback to 'dbbafwgug' if cloud_name is undefined
     const finalCloudName = cloud_name || "dbbafwgug";
     const url = `https://api.cloudinary.com/v1_1/${finalCloudName}/${resourceType}/upload`;
 
