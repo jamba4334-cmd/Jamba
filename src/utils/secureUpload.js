@@ -1,9 +1,9 @@
 import { getAuth } from "firebase/auth";
 import { API_BASE_URL } from "../apiConfig";
 
-// 🔥 Increased limit to 50 MB
-const MAX_IMAGE_MB = 50; 
-const MAX_VIDEO_MB = 100;
+// 🔥 Cloudinary strictly limits Images to 10MB on free tiers. Videos can be larger.
+const MAX_IMAGE_MB = 10; 
+const MAX_VIDEO_MB = 50;
 
 /**
  * Signed Cloudinary upload. The server decides the folder and checks the caller's role.
@@ -12,12 +12,19 @@ const MAX_VIDEO_MB = 100;
  */
 export async function secureUpload(file, purpose, { onProgress } = {}) {
     if (!file) throw new Error("No file selected.");
-    const isVideo = file.type.startsWith("video/");
-    const isImage = file.type.startsWith("image/");
-    const isPdf = file.type === "application/pdf";
+    
+    // 🔥 Better Detection: Checks file extension just in case the browser MIME type is blank
+    const isVideo = file.type.startsWith("video/") || file.name.match(/\.(mp4|mov|avi|wmv|mkv|webm)$/i);
+    const isImage = file.type.startsWith("image/") || file.name.match(/\.(jpg|jpeg|png|gif|webp|heic)$/i);
+    const isPdf = file.type === "application/pdf" || file.name.match(/\.pdf$/i);
+    
     if (!isVideo && !isImage && !isPdf) throw new Error("Only images, videos or PDF files are allowed.");
+    
+    // 🔥 Enforce strict limits based on the actual file type
     const limitMb = isVideo ? MAX_VIDEO_MB : MAX_IMAGE_MB;
-    if (file.size > limitMb * 1024 * 1024) throw new Error(`File is too large (max ${limitMb} MB).`);
+    if (file.size > limitMb * 1024 * 1024) {
+        throw new Error(`File is too large! Maximum size for ${isVideo ? 'videos is 50MB' : 'images is 10MB'}.`);
+    }
 
     const user = getAuth().currentUser;
     if (!user) throw new Error("Your session expired. Please sign in again.");
@@ -41,7 +48,8 @@ export async function secureUpload(file, purpose, { onProgress } = {}) {
     form.append("folder", folder || "jamba_uploads"); 
     form.append("signature", signature);
 
-    const resourceType = isVideo ? "video" : isPdf ? "raw" : "image";
+    // 🔥 Let Cloudinary automatically handle the resource type routing safely
+    const resourceType = isVideo ? "video" : isPdf ? "raw" : "auto";
     
     const finalCloudName = cloud_name || "dbbafwgug";
     const url = `https://api.cloudinary.com/v1_1/${finalCloudName}/${resourceType}/upload`;
@@ -60,5 +68,5 @@ export async function secureUpload(file, purpose, { onProgress } = {}) {
         xhr.send(form);
     });
 
-    return { url: data.secure_url, isVideo: data.resource_type === "video" };
+    return { url: data.secure_url, isVideo: data.resource_type === "video" || isVideo };
 }
