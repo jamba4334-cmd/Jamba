@@ -65,6 +65,7 @@ export default function SellerDashboard() {
     const [isCreatingTicket, setIsCreatingTicket] = useState(false);
     const [newTicketSubject, setNewTicketSubject] = useState("");
     const [ticketMessage, setTicketMessage] = useState("");
+    const [isSubmittingTicket, setIsSubmittingTicket] = useState(false);
 
     useEffect(() => {
         window.showSection = (sectionId) => {
@@ -187,7 +188,9 @@ export default function SellerDashboard() {
 
     const handleCreateTicket = async (e) => {
         e.preventDefault();
-        if (!newTicketSubject.trim() || !ticketMessage.trim()) return;
+        if (!newTicketSubject.trim() || !ticketMessage.trim() || isSubmittingTicket) return;
+        
+        setIsSubmittingTicket(true);
         try {
             const headers = await getAuthHeaders();
             const payload = {
@@ -208,7 +211,11 @@ export default function SellerDashboard() {
                 setTicketMessage("");
                 if(window.showToast) window.showToast("Support ticket created!");
             }
-        } catch (error) { alert("Error creating ticket: " + error.message); }
+        } catch (error) { 
+            alert("Error creating ticket: " + error.message); 
+        } finally {
+            setIsSubmittingTicket(false);
+        }
     };
 
     const handleTicketReply = async (e) => {
@@ -452,9 +459,6 @@ export default function SellerDashboard() {
         setActiveTab('live-products');
     };
 
-    // ==========================================
-    // 🔒 ZERO-TRUST: SECURE SIGNATURE UPLOAD
-    // ==========================================
     const uploadFileWithProgress = async (file, resourceType, totalFiles, completedFilesRef) => {
         const { url } = await secureUpload(file, "product", {
             onProgress: (fraction) => setUploadProgress(Math.round(((completedFilesRef.current + fraction) / totalFiles) * 100)),
@@ -503,8 +507,10 @@ export default function SellerDashboard() {
             }
 
             let sizingData = { sizing_type: null };
-            const dept = document.getElementById('p-gender').value;
-            const cat = document.getElementById('p-category').value;
+            
+            // 🔥 ZERO-TRUST CRASH PREVENTION: Safely checking DOM elements
+            const dept = document.getElementById('p-gender')?.value || "";
+            const cat = document.getElementById('p-category')?.value || "";
             let currentSizingType = null;
             if (dept === 'Men' && ['Shirt', 'T-Shirt', 'Waistcoat'].includes(cat)) currentSizingType = 'chart_top_standard';
             if (dept === 'Men' && cat === 'Trouser') currentSizingType = 'chart_bottom';
@@ -517,7 +523,10 @@ export default function SellerDashboard() {
 
             if (currentSizingType === 'free_size' && document.getElementById('p-length') && document.getElementById('p-width')) {
                 sizingData.sizing_type = 'free_size';
-                sizingData.dimensions = { length: document.getElementById('p-length').value, width: document.getElementById('p-width').value };
+                sizingData.dimensions = { 
+                    length: document.getElementById('p-length')?.value || "", 
+                    width: document.getElementById('p-width')?.value || "" 
+                };
             } else if (currentSizingType?.startsWith('chart_')) {
                 sizingData.sizing_type = currentSizingType;
                 sizingData.size_chart = {};
@@ -540,13 +549,14 @@ export default function SellerDashboard() {
 
             const careInstructions = Array.from(document.querySelectorAll('.p-care-chk:checked')).map(cb => cb.value);
 
+            // 🔥 SAFELY GRAB ALL INPUTS WITH OPTIONAL CHAINING
             const productData = {
-                title: document.getElementById('p-name').value || "",
-                original_price: parseFloat(document.getElementById('p-original-price').value) || 0,
-                selling_price: parseFloat(document.getElementById('p-price').value) || 0,
-                seller_payout: parseFloat(document.getElementById('p-payout').value) || 0,
-                stock: parseInt(document.getElementById('p-stock').value) || 0, 
-                category: (document.getElementById('p-category').value || "") + " - " + (document.getElementById('p-gender').value || ""),
+                title: document.getElementById('p-name')?.value || "",
+                original_price: parseFloat(document.getElementById('p-original-price')?.value) || 0,
+                selling_price: parseFloat(document.getElementById('p-price')?.value) || 0,
+                seller_payout: parseFloat(document.getElementById('p-payout')?.value) || 0,
+                stock: parseInt(document.getElementById('p-stock')?.value) || 0, 
+                category: (document.getElementById('p-category')?.value || "") + " - " + (document.getElementById('p-gender')?.value || ""),
                 ...sizingData,
                 return_policy: document.getElementById('p-return-policy')?.value || "7_day_return_replace", 
                 package_weight: document.getElementById('p-weight')?.value || "Under 500g",
@@ -555,9 +565,9 @@ export default function SellerDashboard() {
                 search_tags: document.getElementById('p-tags')?.value || "",
                 images: finalUrls, 
                 video_url: finalVideoUrl,
-                description: document.getElementById('p-desc').value || "",
-                color: document.getElementById('p-color').value || "",
-                fabric: document.getElementById('p-fabric').value || "",
+                description: document.getElementById('p-desc')?.value || "",
+                color: document.getElementById('p-color')?.value || "",
+                fabric: document.getElementById('p-fabric')?.value || "",
                 brandName: sellerProfile.brandName || "",
                 sellerName: sellerProfile.sellerName || "",
                 sellerPhone: sellerProfile.primaryPhone || "",
@@ -572,8 +582,8 @@ export default function SellerDashboard() {
                 pickupDistrict: selectedPickupDistrict || "",
                 pickupState: selectedPickupState || "",
                 pickupPincode: sellerProfile.pickupPincode || "",
-                allow_cod: document.getElementById('p-pay-cod').checked,
-                allow_online: document.getElementById('p-pay-online').checked,
+                allow_cod: document.getElementById('p-pay-cod')?.checked || false,
+                allow_online: document.getElementById('p-pay-online')?.checked || false,
                 approval_status: "pending", 
                 isHidden: true
             };
@@ -595,7 +605,7 @@ export default function SellerDashboard() {
                 else throw new Error("Submission failed.");
             }
 
-            document.getElementById('new-product-form').reset();
+            document.getElementById('new-product-form')?.reset();
             document.querySelectorAll('.p-care-chk').forEach(cb => cb.checked = false); 
             setEditingProductId(null);
             setCurrentEditImageUrls([null, null, null, null, null]);
@@ -613,9 +623,6 @@ export default function SellerDashboard() {
         }
     };
 
-    // ==========================================
-    // 🔒 ZERO-TRUST: SECURE SIGNATURE PHOTO UPLOAD
-    // ==========================================
     const handleProfilePhotoUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -642,38 +649,38 @@ export default function SellerDashboard() {
 
     const handleProfileSave = async (e) => {
         e.preventDefault();
-        const accNum = document.getElementById('bank-acc-num').value;
-        const confirmAccNum = document.getElementById('bank-acc-num-confirm').value;
-        const ifsc = document.getElementById('bank-ifsc').value;
-        const confirmIfsc = document.getElementById('bank-ifsc-confirm').value;
+        // 🔥 SAFE CHECKS ADDED TO PROFILE SAVE AS WELL
+        const accNum = document.getElementById('bank-acc-num')?.value || "";
+        const confirmAccNum = document.getElementById('bank-acc-num-confirm')?.value || "";
+        const ifsc = document.getElementById('bank-ifsc')?.value || "";
+        const confirmIfsc = document.getElementById('bank-ifsc-confirm')?.value || "";
 
         if (accNum !== confirmAccNum) return alert("Account Numbers do not match.");
         if (ifsc !== confirmIfsc) return alert("IFSC Codes do not match.");
 
         const btn = document.getElementById('save-profile-btn');
-        btn.disabled = true;
-        btn.innerText = 'Saving...';
+        if(btn) { btn.disabled = true; btn.innerText = 'Saving...'; }
 
         const profileData = {
             profilePhoto: tempProfilePhoto,
-            brandName: document.getElementById('prof-brand-name').value,
-            sellerName: document.getElementById('prof-seller-name').value,
-            storeEmail: document.getElementById('prof-email').value,
-            primaryPhone: document.getElementById('prof-phone-1').value,
-            secondaryPhone: document.getElementById('prof-phone-2').value,
-            address: document.getElementById('prof-address').value,
-            town: document.getElementById('prof-town').value,
+            brandName: document.getElementById('prof-brand-name')?.value || "",
+            sellerName: document.getElementById('prof-seller-name')?.value || "",
+            storeEmail: document.getElementById('prof-email')?.value || "",
+            primaryPhone: document.getElementById('prof-phone-1')?.value || "",
+            secondaryPhone: document.getElementById('prof-phone-2')?.value || "",
+            address: document.getElementById('prof-address')?.value || "",
+            town: document.getElementById('prof-town')?.value || "",
             state: selectedState,
             district: selectedDistrict,
-            pincode: document.getElementById('prof-pincode').value,
-            pickupAddress: sameAsPermanent ? document.getElementById('prof-address').value : document.getElementById('pickup-address').value,
-            pickupTown: sameAsPermanent ? document.getElementById('prof-town').value : document.getElementById('pickup-town').value,
+            pincode: document.getElementById('prof-pincode')?.value || "",
+            pickupAddress: sameAsPermanent ? (document.getElementById('prof-address')?.value || "") : (document.getElementById('pickup-address')?.value || ""),
+            pickupTown: sameAsPermanent ? (document.getElementById('prof-town')?.value || "") : (document.getElementById('pickup-town')?.value || ""),
             pickupState: sameAsPermanent ? selectedState : selectedPickupState,
             pickupDistrict: sameAsPermanent ? selectedDistrict : selectedPickupDistrict,
-            pickupPincode: sameAsPermanent ? document.getElementById('prof-pincode').value : document.getElementById('pickup-pincode').value,
+            pickupPincode: sameAsPermanent ? (document.getElementById('prof-pincode')?.value || "") : (document.getElementById('pickup-pincode')?.value || ""),
             sameAsPermanent: sameAsPermanent,
-            bankName: document.getElementById('bank-name').value,
-            accName: document.getElementById('bank-acc-name').value,
+            bankName: document.getElementById('bank-name')?.value || "",
+            accName: document.getElementById('bank-acc-name')?.value || "",
             accNumber: accNum,
             ifsc: ifsc
         };
@@ -694,8 +701,7 @@ export default function SellerDashboard() {
         } catch (err) {
             alert("Failed to save profile: " + err.message);
         } finally {
-            btn.disabled = false;
-            btn.innerText = 'Save Profile Details';
+            if(btn) { btn.disabled = false; btn.innerText = 'Save Profile Details'; }
         }
     };
 
@@ -806,7 +812,7 @@ export default function SellerDashboard() {
                 {activeTab === 'subscription' && <SellerSubscription />}
 
                 <ReviewsTab isActive={activeTab === 'reviews'} sellerReviews={sellerReviews} replyingTo={replyingTo} setReplyingTo={setReplyingTo} replyText={replyText} setReplyText={setReplyText} handlePostReply={handlePostReply} setFullscreenImage={setFullscreenImage} />
-                <MessagesTab isActive={activeTab === 'messages'} isCreatingTicket={isCreatingTicket} setIsCreatingTicket={setIsCreatingTicket} handleCreateTicket={handleCreateTicket} newTicketSubject={newTicketSubject} setNewTicketSubject={setNewTicketSubject} ticketMessage={ticketMessage} setTicketMessage={setTicketMessage} activeTicket={activeTicket} setActiveTicket={setActiveTicket} handleTicketReply={handleTicketReply} supportTickets={supportTickets} />
+                <MessagesTab isActive={activeTab === 'messages'} isCreatingTicket={isCreatingTicket} setIsCreatingTicket={setIsCreatingTicket} handleCreateTicket={handleCreateTicket} newTicketSubject={newTicketSubject} setNewTicketSubject={setNewTicketSubject} ticketMessage={ticketMessage} setTicketMessage={setTicketMessage} activeTicket={activeTicket} setActiveTicket={setActiveTicket} handleTicketReply={handleTicketReply} supportTickets={supportTickets} isSubmittingTicket={isSubmittingTicket} refreshTickets={loadSupportTickets} />
                 
                 {fullscreenImage && (
                     <div className="image-lightbox-overlay" onClick={() => setFullscreenImage(null)}>
