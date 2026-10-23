@@ -3,15 +3,24 @@ import { API_BASE_URL } from "../../apiConfig.js";
 import { auth } from '../../firebase'; 
 import "../styles/Messages.css";
 
-export default function MessagesTab({ getAuthHeaders, supportTickets, setSupportTickets, globalSellers }) {
+// 🔥 Added refreshTickets prop here
+export default function MessagesTab({ getAuthHeaders, supportTickets, setSupportTickets, globalSellers, refreshTickets }) { 
     const [messageTab, setMessageTab] = useState("inbox");
     const [activeTicket, setActiveTicket] = useState(null);
     const [replyText, setReplyText] = useState("");
+    const [isRefreshing, setIsRefreshing] = useState(false); // Loading state for the spin animation
 
     const getHeaders = async () => {
         if (getAuthHeaders) return await getAuthHeaders();
         const token = await auth.currentUser.getIdToken();
         return { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
+    };
+
+    // Wrapper to add a spinning animation while it fetches
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        if (refreshTickets) await refreshTickets();
+        setTimeout(() => setIsRefreshing(false), 500); // Brief delay so the spin is visible
     };
 
     const handleSendBroadcast = async (e) => {
@@ -27,7 +36,7 @@ export default function MessagesTab({ getAuthHeaders, supportTickets, setSupport
         try {
             const newTicketData = {
                 sellerName: targetEmail === 'all' ? 'All Sellers' : globalSellers.find(s => s.email === targetEmail)?.profile?.brandName || targetEmail,
-                sellerEmail: targetEmail, // Updated to match DB structure
+                sellerEmail: targetEmail,
                 subject: subject,
                 status: 'open',
                 date: new Date().toISOString(),
@@ -62,7 +71,6 @@ export default function MessagesTab({ getAuthHeaders, supportTickets, setSupport
         if (!replyText.trim()) return;
 
         try {
-            // Ensure messages is an array, default to empty if not
             const currentMessages = Array.isArray(activeTicket.messages) ? activeTicket.messages : [];
             const updatedMessages = [...currentMessages, { sender: 'admin', text: replyText, time: new Date().toISOString() }];
             
@@ -110,14 +118,27 @@ export default function MessagesTab({ getAuthHeaders, supportTickets, setSupport
         <div className="content-section active">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                 <span className="section-title">Communications Hub</span>
-                <div className="filter-group">
-                    <button type="button" className={`filter-btn ${messageTab === 'inbox' ? 'active' : ''}`} onClick={() => { setMessageTab('inbox'); setActiveTicket(null); }}>
-                        Inbox 
-                        {supportTickets.filter(t => t.status === 'open').length > 0 && <span style={{background:'var(--danger)', color:'white', padding:'2px 6px', borderRadius:'10px', fontSize:'10px', marginLeft:'4px'}}>{supportTickets.filter(t => t.status === 'open').length}</span>}
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    {/* 🔥 NEW REFRESH BUTTON PLACED EXACTLY IN THE BLUE CIRCLE */}
+                    <button 
+                        type="button" 
+                        className="action-btn" 
+                        onClick={handleRefresh} 
+                        style={{ margin: 0, padding: '8px 16px', background: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1' }}
+                    >
+                        <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i> Refresh
                     </button>
-                    <button type="button" className={`filter-btn ${messageTab === 'broadcast' ? 'active' : ''}`} onClick={() => setMessageTab('broadcast')}>
-                        <i className="fa-solid fa-paper-plane"></i> Send Broadcast
-                    </button>
+                    
+                    <div className="filter-group" style={{ margin: 0 }}>
+                        <button type="button" className={`filter-btn ${messageTab === 'inbox' ? 'active' : ''}`} onClick={() => { setMessageTab('inbox'); setActiveTicket(null); }}>
+                            Inbox 
+                            {supportTickets.filter(t => t.status === 'open').length > 0 && <span style={{background:'var(--danger)', color:'white', padding:'2px 6px', borderRadius:'10px', fontSize:'10px', marginLeft:'4px'}}>{supportTickets.filter(t => t.status === 'open').length}</span>}
+                        </button>
+                        <button type="button" className={`filter-btn ${messageTab === 'broadcast' ? 'active' : ''}`} onClick={() => setMessageTab('broadcast')}>
+                            <i className="fa-solid fa-paper-plane"></i> Send Broadcast
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -135,7 +156,6 @@ export default function MessagesTab({ getAuthHeaders, supportTickets, setSupport
                                         <span className={`ticket-status ${ticket.status}`}>{ticket.status === 'open' ? 'Needs Reply' : 'Resolved'}</span>
                                     </div>
                                     <div style={{ fontSize: '13px', color: 'var(--text-main)', marginBottom: '8px' }}>
-                                        {/* Updated to check for sellerEmail since we updated the backend */}
                                         From: <strong>{ticket.sellerName || 'Seller'}</strong> ({ticket.sellerEmail || ticket.email})
                                     </div>
                                     <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
@@ -154,7 +174,6 @@ export default function MessagesTab({ getAuthHeaders, supportTickets, setSupport
                         <div>
                             <button type="button" onClick={() => setActiveTicket(null)} className="action-btn" style={{marginBottom: '10px', fontSize:'12px', padding:'4px 8px'}}><i className="fa-solid fa-arrow-left"></i> Back to Inbox</button>
                             <h3 style={{ margin: 0, color: 'var(--primary)' }}>{activeTicket.subject}</h3>
-                            {/* Updated to check for sellerEmail since we updated the backend */}
                             <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{activeTicket.sellerName || 'Seller'} ({activeTicket.sellerEmail || activeTicket.email})</span>
                         </div>
                         {activeTicket.status === 'open' && (

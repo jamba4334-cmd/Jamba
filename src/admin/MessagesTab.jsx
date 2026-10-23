@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react'; // 🔥 Added useState
 import './MessagesTab.css';
 
 export default function MessagesTab({
@@ -9,17 +9,41 @@ export default function MessagesTab({
     ticketMessage, setTicketMessage,
     activeTicket, setActiveTicket,
     handleTicketReply,
-    supportTickets
+    supportTickets,
+    isSubmittingTicket, // 🔥 NEW PROP
+    refreshTickets      // 🔥 NEW PROP
 }) {
+    const [isRefreshing, setIsRefreshing] = useState(false); // 🔥 Added loading state for animation
+
     if (!isActive) return null;
+
+    // 🔥 Wrapper to add a spinning animation while it fetches
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        if (refreshTickets) await refreshTickets();
+        setTimeout(() => setIsRefreshing(false), 500); // Brief delay so the spin is visible
+    };
 
     return (
         <div id="messages" className="content-section active">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                 <span className="section-title">Support & Messages</span>
-                <button type="button" className="action-btn" onClick={() => setIsCreatingTicket(true)} style={{ margin: 0 }}>
-                    <i className="fa-solid fa-plus"></i> New Support Ticket
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    
+                    {/* 🔥 REFRESH BUTTON PLACED HERE */}
+                    <button 
+                        type="button" 
+                        className="action-btn" 
+                        onClick={handleRefresh} 
+                        style={{ margin: 0, padding: '8px 16px', background: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1' }}
+                    >
+                        <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i> Refresh
+                    </button>
+
+                    <button type="button" className="action-btn" onClick={() => setIsCreatingTicket(true)} style={{ margin: 0 }}>
+                        <i className="fa-solid fa-plus"></i> New Support Ticket
+                    </button>
+                </div>
             </div>
 
             {isCreatingTicket ? (
@@ -38,6 +62,7 @@ export default function MessagesTab({
                             className="input-box" 
                             placeholder="e.g. Question about my recent payout" 
                             required 
+                            disabled={isSubmittingTicket} // 🔥 Locks input during submit
                         />
                     </div>
                     
@@ -50,11 +75,17 @@ export default function MessagesTab({
                             style={{ height: '120px' }} 
                             placeholder="Provide details here..." 
                             required
+                            disabled={isSubmittingTicket} // 🔥 Locks input during submit
                         ></textarea>
                     </div>
                     
-                    <button type="submit" className="btn-submit" style={{ margin: 0, width: 'auto', padding: '10px 24px' }}>
-                        Submit Ticket
+                    <button 
+                        type="submit" 
+                        className="btn-submit" 
+                        style={{ margin: 0, width: 'auto', padding: '10px 24px' }}
+                        disabled={isSubmittingTicket} // 🔥 Prevents spam clicks
+                    >
+                        {isSubmittingTicket ? "Submitting..." : "Submit Ticket"}
                     </button>
                 </form>
             ) : activeTicket ? (
