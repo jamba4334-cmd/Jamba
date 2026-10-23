@@ -230,10 +230,11 @@ export default function AdminLayout() {
         } catch (error) { console.error("Error loading orders:", error); }
     };
 
+    // 🔥 ZERO-TRUST FIX: Fetch from the secure Admin API route
     const loadSupportTickets = async () => {
         try {
             const headers = await getAuthHeaders();
-            const res = await fetch(`${API_BASE_URL}/api/v1/seller/tickets`, { headers });
+            const res = await fetch(`${API_BASE_URL}/api/v1/admin/tickets`, { headers });
             if (res.ok) setSupportTickets(await res.json());
         } catch (error) { console.error("Error loading tickets:", error); }
     };
