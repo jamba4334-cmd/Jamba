@@ -13,8 +13,11 @@ export default function SellerLanding() {
     const [formStep, setFormStep] = useState(1); 
     
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [registrationSuccess, setRegistrationSuccess] = useState(false);
     const [uploadingTarget, setUploadingTarget] = useState(null);
+    
+    // Lifecycle States
+    const [sellerStatus, setSellerStatus] = useState(null); // 'review', 'approved', 'rejected', 'blacklisted'
+    const [applicationData, setApplicationData] = useState(null);
     
     const [authError, setAuthError] = useState("");
     const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -47,18 +50,26 @@ export default function SellerLanding() {
             const userEmail = result.user.email.toLowerCase();
             const token = await result.user.getIdToken(); 
 
-            // SECURE FETCH: Check seller status via Python Backend
+            // SECURE FETCH: Check seller status
             const response = await fetch(`${API_BASE_URL}/api/v1/seller/onboarding`, {
                 headers: { 'Authorization': `Bearer ${token}` } 
             });
             
             if (response.ok) {
                 const data = await response.json();
+                setApplicationData(data.application || null);
+
                 if (data.status === "approved") {
-                    navigate('/seller'); 
+                    setSellerStatus("approved");
                     return;
                 } else if (data.status === "kyc_submitted" || data.status === "pending_kyc") {
-                    navigate('/seller/kyc'); 
+                    setSellerStatus("review");
+                    return;
+                } else if (data.status === "rejected") {
+                    setSellerStatus("rejected");
+                    return;
+                } else if (data.status === "blacklisted") {
+                    setSellerStatus("blacklisted");
                     return;
                 }
             }
@@ -68,13 +79,12 @@ export default function SellerLanding() {
 
         } catch (error) {
             console.error("Auth Error:", error);
-            setLoginError("Google Sign-In failed or was blocked. Verification is required.");
+            setLoginError("Google Sign-In failed or was blocked.");
         } finally {
             setIsLoggingIn(false);
         }
     };
 
-    // 🔥 ZERO-TRUST UPDATE: Signed Upload via Python Proxy
     const handleSecureFileUpload = async (e, fieldName) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -137,80 +147,106 @@ export default function SellerLanding() {
                 submittedAt: new Date().toISOString()
             };
 
-            // SECURE POST: Submit KYC details to Python Backend
             const response = await fetch(`${API_BASE_URL}/api/v1/seller/onboarding`, {
                 method: 'POST',
-                headers: { 
-                    'Authorization': `Bearer ${token}`, 
-                    'Content-Type': 'application/json' 
-                },
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
-            if (!response.ok) throw new Error("Submission rejected by server.");
+            if (!response.ok) {
+                if (response.status === 403) throw new Error("Account blacklisted due to multiple rejections.");
+                throw new Error("Submission rejected by server.");
+            }
 
             setIsSubmitting(false);
-            setRegistrationSuccess(true);
+            setShowForm(false);
+            setSellerStatus("review"); // Transition straight to the review card
+            
         } catch (error) {
             setIsSubmitting(false);
             setAuthError(error?.message || "Permission Denied: Could not connect to the secured database.");
         }
     };
 
-    if (showForm) {
-        // 🔥 FIX: Completely isolated Success Card layout
-        if (registrationSuccess) {
-            return (
-                <div className="seller-form-page">
-                    <div style={{ 
-                        width: '100%', 
-                        maxWidth: '540px', 
-                        background: 'var(--ws-cream)', 
-                        padding: '48px 40px', 
-                        borderRadius: '16px', 
-                        border: '1px solid var(--ws-line)', 
-                        boxShadow: 'var(--ws-shadow)', 
-                        textAlign: 'center', 
-                        margin: '0 auto' 
-                    }}>
-                        <div style={{ 
-                            width: '80px', 
-                            height: '80px', 
-                            margin: '0 auto 24px', 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center', 
-                            borderRadius: '50%', 
-                            background: 'var(--ws-sand)', 
-                            border: '1px solid var(--ws-line)' 
-                        }}>
-                            <i className="fa-solid fa-file-shield" style={{ fontSize: '36px', color: 'var(--ws-brown)' }}></i>
-                        </div>
-                        
-                        <h2 style={{ fontSize: '1.75rem', fontWeight: '600', margin: '0 0 16px', color: 'var(--ws-ink)', letterSpacing: '-0.02em' }}>
-                            KYC Under Review
-                        </h2>
-                        
-                        <p style={{ color: 'var(--ws-body)', fontSize: '1.05rem', lineHeight: '1.6', margin: '0 0 32px' }}>
-                            Your legal documents and application for <strong>{formData.brandName}</strong> have been safely uploaded and transmitted to our administrative team.
-                        </p>
-                        
-                        <div style={{ background: 'var(--ws-muted)', padding: '16px', borderRadius: '8px', border: '1px solid var(--ws-line)', marginBottom: '32px' }}>
-                            <p style={{ fontSize: '0.9rem', color: 'var(--ws-body)', margin: 0, lineHeight: '1.5' }}>
-                                <i className="fa-solid fa-clock" style={{ color: 'var(--ws-brown)', marginRight: '6px' }}></i> 
-                                Verification typically takes 24-48 hours. We will notify you via email once your storefront is ready to go live.
-                            </p>
-                        </div>
-                        
-                        <button className="seller-btn-ghost" style={{ width: '100%' }} onClick={() => navigate('/')}>
-                            Return to Home
-                        </button>
-                    </div>
-                </div>
-            );
+    // ==========================================
+    // DYNAMIC STATUS CARD RENDERER
+    // ==========================================
+    const renderStatusCard = () => {
+        let icon = "fa-file-shield";
+        let iconColor = "var(--ws-brown)";
+        let title = "KYC Under Review";
+        let message = `Your legal documents and application for ${applicationData?.brandName || formData.brandName || "JAMBA WEAR"} have been safely uploaded.`;
+        let subText = "Verification typically takes 24-48 hours. We will notify you via email once your storefront is ready to go live.";
+        let buttonText = "Return to Home";
+        let buttonAction = () => navigate('/');
+        let buttonClass = "seller-btn-ghost";
+
+        if (sellerStatus === "approved") {
+            icon = "fa-circle-check";
+            iconColor = "#166534";
+            title = "Congratulations!";
+            message = "You are now an official seller of JAMBA WEAR. Your storefront is ready!";
+            subText = "Start uploading your products and managing your inventory.";
+            buttonText = "Go to Seller Dashboard";
+            buttonAction = () => navigate('/seller');
+            buttonClass = "seller-btn-primary";
+        } else if (sellerStatus === "rejected") {
+            icon = "fa-triangle-exclamation";
+            iconColor = "#991b1b";
+            title = "Application Rejected";
+            message = "We are sorry, you have not fulfilled the requirements to be a seller.";
+            const attemptsUsed = applicationData?.rejectionCount || 1;
+            subText = `You have used ${attemptsUsed} of 5 application attempts. Please correct your documents before trying again.`;
+            buttonText = "Re-Submit Application";
+            buttonAction = () => { setSellerStatus(null); setShowForm(true); };
+            buttonClass = "seller-btn-primary";
+        } else if (sellerStatus === "blacklisted") {
+            icon = "fa-ban";
+            iconColor = "#991b1b";
+            title = "Account Blacklisted";
+            message = "Your account has been permanently restricted from the seller program.";
+            subText = "You have exceeded the maximum number of rejected applications (5). Contact support for further assistance.";
+            buttonText = "Return to Home";
+            buttonAction = () => navigate('/');
+            buttonClass = "seller-btn-ghost";
         }
 
-        // Original Form UI
+        return (
+            <div className="seller-form-page">
+                <div style={{ width: '100%', maxWidth: '540px', background: 'var(--ws-cream)', padding: '48px 40px', borderRadius: '16px', border: '1px solid var(--ws-line)', boxShadow: 'var(--ws-shadow)', textAlign: 'center', margin: '0 auto' }}>
+                    
+                    <div style={{ width: '80px', height: '80px', margin: '0 auto 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'var(--ws-sand)', border: '1px solid var(--ws-line)' }}>
+                        <i className={`fa-solid ${icon}`} style={{ fontSize: '36px', color: iconColor }}></i>
+                    </div>
+                    
+                    <h2 style={{ fontSize: '1.75rem', fontWeight: '600', margin: '0 0 16px', color: 'var(--ws-ink)', letterSpacing: '-0.02em' }}>{title}</h2>
+                    <p style={{ color: 'var(--ws-body)', fontSize: '1.05rem', lineHeight: '1.6', margin: '0 0 32px' }}>{message}</p>
+                    
+                    {sellerStatus === "rejected" && applicationData?.rejectionReason && (
+                        <div style={{ background: '#fef2f2', padding: '16px', borderRadius: '8px', border: '1px solid #fecaca', marginBottom: '24px', textAlign: 'left' }}>
+                            <p style={{ fontSize: '0.9rem', color: '#991b1b', margin: 0, fontWeight: '600' }}><strong>Admin Note:</strong> {applicationData.rejectionReason}</p>
+                        </div>
+                    )}
+                    
+                    <div style={{ background: 'var(--ws-muted)', padding: '16px', borderRadius: '8px', border: '1px solid var(--ws-line)', marginBottom: '32px' }}>
+                        <p style={{ fontSize: '0.9rem', color: 'var(--ws-body)', margin: 0, lineHeight: '1.5' }}>
+                            {(sellerStatus === "review" || sellerStatus === "rejected") && <i className="fa-solid fa-circle-info" style={{ color: 'var(--ws-brown)', marginRight: '6px' }}></i>}
+                            {subText}
+                        </p>
+                    </div>
+                    
+                    <button className={buttonClass} style={{ width: '100%' }} onClick={buttonAction}>{buttonText}</button>
+                </div>
+            </div>
+        );
+    };
+
+    if (sellerStatus) return renderStatusCard();
+
+    // ==========================================
+    // FORM RENDERER
+    // ==========================================
+    if (showForm) {
         return (
             <div className="seller-form-page">
                 <div className="seller-form-shell">
