@@ -3,8 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { signOut } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore'; 
-import { auth, db } from '../firebase'; 
+import { auth } from '../firebase'; 
+import { API_BASE_URL } from '../apiConfig';
 import './Navbar.css';
 
 import brandLogo from '../assets/JAMBA-Logo.png';
@@ -17,8 +17,6 @@ export default function Navbar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   const [searchQuery, setSearchQuery] = useState("");
-  
-  // 🔥 NEW: State to track if the user has scrolled down
   const [isScrolled, setIsScrolled] = useState(false);
   
   const [promoMessages, setPromoMessages] = useState([{ text: "Free Delivery On Orders Above ₹2000", color: "#ffffff" }]);
@@ -37,10 +35,8 @@ export default function Navbar() {
       displayName = user.displayName.split(' ')[0]; 
   }
 
-  // 🔥 NEW: Scroll Listener to trigger the animation
   useEffect(() => {
     const handleScroll = () => {
-      // If the user scrolls down more than 40px, collapse the search bar
       if (window.scrollY > 40) {
         setIsScrolled(true);
       } else {
@@ -63,23 +59,28 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, "settings", "hero_banners"), (docSnapshot) => {
-      if (docSnapshot.exists()) {
-        const data = docSnapshot.data();
-        
-        if (data.promo_messages && Array.isArray(data.promo_messages)) {
-            setPromoMessages(data.promo_messages);
-        } else if (data.promo_text) {
-            setPromoMessages([{ text: data.promo_text, color: "#ffffff" }]);
-        }
+    const fetchBanners = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/v1/public/settings/hero_banners`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.promo_messages && Array.isArray(data.promo_messages)) {
+              setPromoMessages(data.promo_messages);
+          } else if (data.promo_text) {
+              setPromoMessages([{ text: data.promo_text, color: "#ffffff" }]);
+          }
 
-        if (data.promo_mode) setPromoMode(data.promo_mode);
-        if (data.promo_bg_color) setPromoBgColor(data.promo_bg_color);
-        if (data.promo_thread1) setPromoThread1(data.promo_thread1);
-        if (data.promo_video) setPromoVideo(data.promo_video); 
+          if (data.promo_mode) setPromoMode(data.promo_mode);
+          if (data.promo_bg_color) setPromoBgColor(data.promo_bg_color);
+          if (data.promo_thread1) setPromoThread1(data.promo_thread1);
+          if (data.promo_video) setPromoVideo(data.promo_video); 
+        }
+      } catch (error) {
+        console.error("Failed to load banners via API:", error);
       }
-    });
-    return () => unsub();
+    };
+    
+    fetchBanners();
   }, []);
 
   useEffect(() => {
@@ -138,7 +139,6 @@ export default function Navbar() {
 
   return (
     <>
-      {/* 🔥 The "scrolled" class is applied here when the user scrolls down */}
       <div className={`fixed-header-wrapper ${isScrolled ? 'scrolled' : ''}`}>
         <header className="top-bar">
           <div className="logo">

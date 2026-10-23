@@ -45,11 +45,11 @@ export default function SellerLanding() {
         try {
             const result = await signInWithPopup(auth, provider);
             const userEmail = result.user.email.toLowerCase();
-            const token = await result.user.getIdToken();
+            const token = await result.user.getIdToken(); // 🔥 GET SECURE TOKEN
 
             // SECURE FETCH: Check seller status via Python Backend
             const response = await fetch(`${API_BASE_URL}/api/v1/seller/onboarding`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { 'Authorization': `Bearer ${token}` } // 🔥 SEND SECURE TOKEN
             });
             
             if (response.ok) {
@@ -86,8 +86,8 @@ export default function SellerLanding() {
 
         setUploadingTarget(fieldName);
         try {
+            // This now securely calls your Python server for a signature first
             const data = { secure_url: (await secureUpload(file, "kyc")).url };
-
             setFormData(prev => ({ ...prev, [fieldName]: data.secure_url }));
         } catch (err) {
             alert("Secure Upload failed: " + (err.message || "Unknown error"));
@@ -116,7 +116,8 @@ export default function SellerLanding() {
             const auth = getAuth();
             if (!auth.currentUser) throw new Error("Your secure session expired. Please log in again.");
             
-            const token = await auth.currentUser.getIdToken();
+            // 🔥 GET SECURE TOKEN
+            const token = await auth.currentUser.getIdToken(); 
             const isGstRegistered = formData.hasGst === 'yes';
             
             const payload = {
@@ -142,7 +143,7 @@ export default function SellerLanding() {
             const response = await fetch(`${API_BASE_URL}/api/v1/seller/onboarding`, {
                 method: 'POST',
                 headers: { 
-                    'Authorization': `Bearer ${token}`,
+                    'Authorization': `Bearer ${token}`, // 🔥 SEND SECURE TOKEN
                     'Content-Type': 'application/json' 
                 },
                 body: JSON.stringify(payload)

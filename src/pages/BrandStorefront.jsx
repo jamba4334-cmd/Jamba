@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { db } from '../firebase';
 import { API_BASE_URL } from '../apiConfig'; // 🔥 NEW: Import API URL
 import './BrandStorefront.css';
 

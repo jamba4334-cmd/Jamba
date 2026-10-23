@@ -29,17 +29,22 @@ export async function secureUpload(file, purpose, { onProgress } = {}) {
     if (sigRes.status === 401) throw new Error("Your session expired. Please sign in again.");
     if (sigRes.status === 403) throw new Error("You are not allowed to upload here.");
     if (!sigRes.ok) throw new Error("Could not prepare the upload. Please try again.");
+    
+    // Extract data from server
     const { signature, timestamp, folder, api_key, cloud_name } = await sigRes.json();
 
     const form = new FormData();
     form.append("file", file);
     form.append("api_key", api_key);
     form.append("timestamp", timestamp);
-    form.append("folder", folder);
+    form.append("folder", folder || "jamba_uploads"); // Fallback folder
     form.append("signature", signature);
 
     const resourceType = isVideo ? "video" : isPdf ? "raw" : "image";
-    const url = `https://api.cloudinary.com/v1_1/${cloud_name}/${resourceType}/upload`;
+    
+    // 🔥 THE FIX: Fallback to 'dbbafwgug' if cloud_name is undefined
+    const finalCloudName = cloud_name || "dbbafwgug";
+    const url = `https://api.cloudinary.com/v1_1/${finalCloudName}/${resourceType}/upload`;
 
     const data = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();

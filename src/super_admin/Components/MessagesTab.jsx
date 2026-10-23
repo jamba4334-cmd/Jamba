@@ -27,7 +27,7 @@ export default function MessagesTab({ getAuthHeaders, supportTickets, setSupport
         try {
             const newTicketData = {
                 sellerName: targetEmail === 'all' ? 'All Sellers' : globalSellers.find(s => s.email === targetEmail)?.profile?.brandName || targetEmail,
-                email: targetEmail,
+                sellerEmail: targetEmail, // Updated to match DB structure
                 subject: subject,
                 status: 'open',
                 date: new Date().toISOString(),
@@ -62,7 +62,9 @@ export default function MessagesTab({ getAuthHeaders, supportTickets, setSupport
         if (!replyText.trim()) return;
 
         try {
-            const updatedMessages = [...activeTicket.messages, { sender: 'admin', text: replyText, time: new Date().toISOString() }];
+            // Ensure messages is an array, default to empty if not
+            const currentMessages = Array.isArray(activeTicket.messages) ? activeTicket.messages : [];
+            const updatedMessages = [...currentMessages, { sender: 'admin', text: replyText, time: new Date().toISOString() }];
             
             const headers = await getHeaders();
             const res = await fetch(`${API_BASE_URL}/api/v1/admin/tickets/${activeTicket.id}`, {
@@ -133,7 +135,8 @@ export default function MessagesTab({ getAuthHeaders, supportTickets, setSupport
                                         <span className={`ticket-status ${ticket.status}`}>{ticket.status === 'open' ? 'Needs Reply' : 'Resolved'}</span>
                                     </div>
                                     <div style={{ fontSize: '13px', color: 'var(--text-main)', marginBottom: '8px' }}>
-                                        From: <strong>{ticket.sellerName}</strong> ({ticket.email})
+                                        {/* Updated to check for sellerEmail since we updated the backend */}
+                                        From: <strong>{ticket.sellerName || 'Seller'}</strong> ({ticket.sellerEmail || ticket.email})
                                     </div>
                                     <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                                         {new Date(ticket.date).toLocaleString()} | ID: {ticket.id}
@@ -151,7 +154,8 @@ export default function MessagesTab({ getAuthHeaders, supportTickets, setSupport
                         <div>
                             <button type="button" onClick={() => setActiveTicket(null)} className="action-btn" style={{marginBottom: '10px', fontSize:'12px', padding:'4px 8px'}}><i className="fa-solid fa-arrow-left"></i> Back to Inbox</button>
                             <h3 style={{ margin: 0, color: 'var(--primary)' }}>{activeTicket.subject}</h3>
-                            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{activeTicket.sellerName} ({activeTicket.email})</span>
+                            {/* Updated to check for sellerEmail since we updated the backend */}
+                            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{activeTicket.sellerName || 'Seller'} ({activeTicket.sellerEmail || activeTicket.email})</span>
                         </div>
                         {activeTicket.status === 'open' && (
                             <button type="button" onClick={markTicketResolved} className="action-btn btn-status-active">
@@ -161,7 +165,7 @@ export default function MessagesTab({ getAuthHeaders, supportTickets, setSupport
                     </div>
 
                     <div className="chat-history-container">
-                        {activeTicket.messages.map((msg, idx) => (
+                        {Array.isArray(activeTicket.messages) && activeTicket.messages.map((msg, idx) => (
                             <div key={idx} className={`chat-bubble-wrapper ${msg.sender === 'admin' ? 'admin-bubble' : 'seller-bubble'}`}>
                                 <div className="chat-bubble">
                                     {msg.text}
@@ -171,10 +175,12 @@ export default function MessagesTab({ getAuthHeaders, supportTickets, setSupport
                         ))}
                     </div>
 
-                    <form onSubmit={handleReplyTicket} style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
-                        <input type="text" className="input-box" value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="Type your reply here..." required style={{flex: 1}} />
-                        <button type="submit" className="btn-submit" style={{width: 'auto', margin: 0, padding: '10px 24px'}}>Reply</button>
-                    </form>
+                    {activeTicket.status === 'open' && (
+                        <form onSubmit={handleReplyTicket} style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
+                            <input type="text" className="input-box" value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="Type your reply here..." required style={{flex: 1}} />
+                            <button type="submit" className="btn-submit" style={{width: 'auto', margin: 0, padding: '10px 24px'}}>Reply</button>
+                        </form>
+                    )}
                 </div>
             )}
 

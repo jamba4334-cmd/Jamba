@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore'; 
-
-import { auth, db } from '../firebase'; 
+import { auth } from '../firebase'; // 🔥 Removed 'db' and all 'firebase/firestore' imports
 import { API_BASE_URL } from '../apiConfig';
 import { secureUpload } from '../utils/secureUpload';
 import './Orders.css';
@@ -31,7 +29,7 @@ export default function Orders() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         fetchUserOrders(user);
-        fetchUserReviews(user.uid); 
+        fetchUserReviews(user); // 🔥 Passed the full user object to get the secure token
       } else {
         navigate('/login?redirect=orders');
       }
@@ -39,13 +37,24 @@ export default function Orders() {
     return () => unsubscribe();
   }, [navigate]);
 
-  const fetchUserReviews = async (uid) => {
+  // 🔥 ZERO-TRUST FIX: Securely fetch user reviews through the Python backend
+  const fetchUserReviews = async (user) => {
     try {
-      const q = query(collection(db, "reviews"), where("userId", "==", uid));
-      const querySnapshot = await getDocs(q);
+      const token = await user.getIdToken();
+      const response = await fetch(`${API_BASE_URL}/api/v1/customer/reviews`, {
+          method: 'GET',
+          headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+          }
+      });
+
+      if (!response.ok) throw new Error("Failed to fetch secure reviews");
+
+      const querySnapshot = await response.json();
       const reviewsMap = {};
-      querySnapshot.docs.forEach(doc => {
-        const data = doc.data();
+      
+      querySnapshot.forEach(data => {
         if (data.orderId) {
             reviewsMap[`${data.orderId}_${data.productId}`] = data; 
         } else {
@@ -54,11 +63,11 @@ export default function Orders() {
       });
       setUserReviews(reviewsMap);
     } catch (err) {
-      console.error("Error fetching user reviews:", err);
+      console.error("Error fetching user reviews securely:", err);
     }
   };
 
-  // 🔥 ZERO-TRUST FIX: Securely fetch orders through the Python backend
+  // Securely fetch orders
   const fetchUserOrders = async (user) => {
     try {
       const token = await user.getIdToken();
@@ -187,6 +196,7 @@ export default function Orders() {
     setIsUploading(false);
   };
 
+  // 🔥 ZERO-TRUST FIX: Submit Review securely through Python API
   const submitReview = async () => {
     if (rating === 0) {
       alert("Please select a star rating!");
@@ -196,6 +206,7 @@ export default function Orders() {
     setIsSubmitting(true);
     try {
       const currentUser = auth.currentUser;
+      const token = await currentUser.getIdToken();
       
       const reviewData = {
         productId: productToReview.id,
@@ -203,15 +214,21 @@ export default function Orders() {
         sellerEmail: productToReview.sellerEmail || "", 
         brandName: productToReview.brandName || "JAMBAWEAR", 
         sellerId: productToReview.sellerId || "JAMBA_DIRECT", 
-        userId: currentUser.uid,
-        userName: currentUser.displayName || "Jamba Customer",
         rating: rating,
         reviewText: reviewText,
-        images: uploadedImages,
-        createdAt: serverTimestamp(),
+        images: uploadedImages
       };
 
-      await addDoc(collection(db, "reviews"), reviewData);
+      const response = await fetch(`${API_BASE_URL}/api/v1/customer/reviews`, {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(reviewData)
+      });
+
+      if (!response.ok) throw new Error("Server rejected review submission");
       
       setUserReviews(prev => ({
         ...prev,
@@ -546,7 +563,6 @@ export default function Orders() {
           </div>
         </div>
       )}
-
     </main>
   );
 }

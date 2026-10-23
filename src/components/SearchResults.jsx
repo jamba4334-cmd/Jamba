@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebase';
+import { API_BASE_URL } from '../apiConfig'; // 🔥 Added API config
 import './SearchResults.css'; 
 
 export default function SearchResults() {
@@ -13,34 +12,44 @@ export default function SearchResults() {
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Filter State (Only Sort by is left!)
+  // Filter State
   const [sortOption, setSortOption] = useState('recommended');
 
-  // 1. Fetch matching products
+  // 🔥 ZERO-TRUST UPDATE: Fetch matching products securely via Python Backend
   useEffect(() => {
     async function fetchSearchResults() {
       setLoading(true);
       try {
-        const querySnapshot = await getDocs(collection(db, "products"));
+        // Calls the public Python endpoint instead of querying Firestore directly
+        const response = await fetch(`${API_BASE_URL}/api/v1/public/products`);
+        
+        if (!response.ok) {
+          throw new Error("Failed to fetch products from secure API.");
+        }
+        
+        const data = await response.json();
+        // Handle whether your API returns a direct array or a wrapped object like { products: [...] }
+        const productsArray = Array.isArray(data) ? data : (data.products || []);
+        
         const matches = [];
         const searchTerm = queryParam.toLowerCase().trim();
 
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          if (data.isHidden) return;
+        productsArray.forEach((product) => {
+          if (product.isHidden) return;
 
-          const searchableText = `${data.title || ''} ${data.brandName || ''} ${data.category || ''} ${data.color || ''} ${data.fabric || ''}`.toLowerCase();
+          const searchableText = `${product.title || ''} ${product.brandName || ''} ${product.category || ''} ${product.color || ''} ${product.fabric || ''}`.toLowerCase();
 
           if (searchableText.includes(searchTerm)) {
-            matches.push({ id: data.item_id || doc.id, ...data });
+            matches.push({ id: product.item_id || product.id, ...product });
           }
         });
 
         setAllProducts(matches);
       } catch (error) {
-        console.error("Error searching products:", error);
+        console.error("Error searching products securely:", error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
 
     if (queryParam) {
@@ -51,7 +60,7 @@ export default function SearchResults() {
     }
   }, [queryParam]);
 
-  // 2. Apply Sorting whenever the option changes
+  // Apply Sorting whenever the option changes
   useEffect(() => {
     let result = [...allProducts];
 
@@ -62,13 +71,12 @@ export default function SearchResults() {
       result.sort((a, b) => (b.selling_price || 0) - (a.selling_price || 0));
     } else if (sortOption === 'newest') {
       result.sort((a, b) => {
-        // Sorts by newest first if you have createdAt in Firebase
-        const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.created_at || 0);
-        const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.created_at || 0);
+        // Handle dates depending on how Python returns them (string vs timestamp)
+        const dateA = new Date(a.createdAt || a.created_at || 0).getTime();
+        const dateB = new Date(b.createdAt || b.created_at || 0).getTime();
         return dateB - dateA;
       });
     } else if (sortOption === 'popularity') {
-      // Sorts by sales or views if you track that, else falls back cleanly
       result.sort((a, b) => (b.sales || 0) - (a.sales || 0));
     }
 
@@ -79,7 +87,9 @@ export default function SearchResults() {
   const SearchProductCard = ({ product }) => {
     const price = product.selling_price || product.price || 0;
     const originalPrice = product.original_price || price; 
-    const imgUrl = (product.images && product.images.length > 0) ? product.images[0] : (product.image || "https://raw.githubusercontent.com/jamba4334-cmd/JAMBA/main/assets/JAMBA.png");
+    const imgUrl = (product.images && product.images.length > 0) 
+      ? product.images[0] 
+      : (product.image || "https://raw.githubusercontent.com/jamba4334-cmd/JAMBA/main/assets/JAMBA.png");
 
     return (
       <div className="search-product-card" onClick={() => navigate(`/product/${product.id}`)}>
